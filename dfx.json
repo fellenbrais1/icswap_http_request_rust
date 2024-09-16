@@ -1,0 +1,17 @@
+{
+  "canisters": {
+    "freeos_swap_rust_backend": {
+      "candid": "src/freeos_swap_rust_backend/freeos_swap_rust_backend.did",
+      "package": "freeos_swap_rust_backend",
+      "type": "rust"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
