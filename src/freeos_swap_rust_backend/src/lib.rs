@@ -22,11 +22,12 @@ struct Context {
 
 #[ic_cdk::update]
 async fn foo() -> String {
-    let request_url : String = String::from("https://api-xprnetwork-main.saltant.io/v1/chain/get_table_rows");
-    let request_body : String = String::from(r#"{"json":true,"code":"eosio.token","lower_bound":"XPR","upper_bound":"XPR","table":"accounts","scope":"tommccann","limit":1}"#);
+    let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
+    // let request_body : String = String::from(r#"{"json":true,"code":"eosio.token","lower_bound":"XPR","upper_bound":"XPR","table":"accounts","scope":"tommccann","limit":1}"#);
+    let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
 
     let host = request_url.split('/').nth(2).unwrap_or_default().to_string();
-    let idempotency_key = "d83jf920djc8shf92j8fhs93d82fhs93";
+    let idempotency_key = "d83jf920djc8shf92j8fhs93d82fhs94";
     
     let request_headers = vec![
         HttpHeader {
@@ -56,16 +57,16 @@ async fn foo() -> String {
         method: HttpMethod::POST,
         body: request_body_vec,               //optional for request
         max_response_bytes: None, //optional for request
-        // transform: Some(TransformContext {
-        //     // The "method" parameter needs to have the same name as the function name of your transform function
-        //     function: TransformFunc(candid::Func {
-        //         principal: ic_cdk::api::id(),
-        //         method: "transform".to_string(),
-        //     }),
-        //     // The "TransformContext" function does need a context parameter, it can be empty
-        //     context: vec![],
-        // }),
-        transform: None,
+        transform: Some(TransformContext {
+            // The "method" parameter needs to have the same name as the function name of your transform function
+            function: TransformFunc(candid::Func {
+                principal: ic_cdk::api::id(),
+                method: "clean_dynamic_content".to_string(),
+            }),
+            // The "TransformContext" function does need a context parameter, it can be empty
+            context: vec![],
+        }),
+        // transform: None,
         headers: request_headers,
     };
 
@@ -90,9 +91,29 @@ async fn foo() -> String {
             //To do this:
             //  1. Call `String::from_utf8()` on response.body
             //  3. Use a switch to explicitly call out both cases of decoding the Blob into ?Text
-            let str_body = String::from_utf8(response.body)
+            let string_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
-            ic_cdk::api::print(format!("{:?}", str_body));
+            ic_cdk::api::print(format!("{:?}", string_body));
+
+            // SERDE
+            // Parse the JSON string
+            let str_body: &str = string_body.as_str();
+            match serde_json::from_str::<Value>(str_body) {
+                Ok(parsed) => {
+                    // Access the second record in the array and retrieve the Amount
+                    if let Some(amount) = parsed["rows"][1]["utc_time"].as_i64() {
+                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
+                    } else {
+                        ic_cdk::api::print(format!("Failed to retrieve Amount from the second record"));
+                    }
+                }
+                Err(e) => {
+                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
+                }
+            }
+            // END SERDE
+
+
 
             //The API response will looks like this:
             // { successful: true }
@@ -112,5 +133,17 @@ async fn foo() -> String {
         }
     }
 
+}
+
+#[ic_cdk::query]
+fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
+    let mut response = args.response;
+
+    // Filter out the 'Date' header from the headers
+    //response.headers.retain(|header| header.name != "Date" && header.name != "CF-RAY" && header.name != "Report-To");
+    response.headers.clear();
+    
+    // Return the cleaned response
+    response
 }
 
