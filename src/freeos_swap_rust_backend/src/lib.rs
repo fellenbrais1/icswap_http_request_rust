@@ -1,8 +1,8 @@
+use ic_cdk::api::call;
 use candid::CandidType;
-use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,
-    TransformContext, TransformFunc,
-};
+use candid::Blob;
+use candid::Principal;
+use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 
@@ -11,11 +11,78 @@ struct UserRecord {
     proton_account: String,
     ic_principal: String,
     amount: String,
-    utc_time: u64,
+    utc_time: String,
+}
+
+type Tokens = u64;
+
+#[derive(CandidType)]
+struct MyData {
+    blob_field: Blob,
+}
+
+struct Account {
+    owner: Principal,
+    subaccount: opt SubAccount,
+}
+
+#[derive(CandidType, Deserialize, Serialize)]
+struct TransferArg {
+    from_subaccount: opt SubAccount,
+    to: Account,
+    amount: Tokens,
+    fee: opt Tokens,
+    memo: opt blob,
+    created_at_time: opt Timestamp,
+};
+
+const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
+// static megastring: String = ICRC1_LEDGER_CANISTER_ID.to_string();
+
+#[ic_cdk::update]
+pub fn main() -> Principal {
+    let working_transfer_id = set_up_transfer_id();
+    return working_transfer_id
 }
 
 #[ic_cdk::update]
-async fn foo() -> (String, UserRecord) {
+pub fn set_up_transfer_id() -> Principal {
+    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+    println!("{}", working_transfer_id);
+    ic_cdk::api::print(format!("The working transfer id is: {}", working_transfer_id));
+    working_transfer_id
+}
+
+#[ic_cdk::update]
+pub async fn transfer(to: candid::Principal, amount: u64) -> Result<(), String> {
+    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+    let result: Result<(), _> = call::call(working_transfer_id, "transfer", (to, amount)).await;
+    result.map_err(|err| format!("Transfer failed: {:?}", err))
+}
+
+#[ic_cdk::query]
+pub async fn balance_of(who: Principal) -> Result<(), String> {
+    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+    let result: Result<(), _> = call::call(working_transfer_id, "balance_of", (who,)).await;
+    result.map_err(|err| format!("Balance query failed: {:?}", err))
+}
+
+#[ic_cdk::update]
+pub async fn mint_tokens(to: Principal, amount: u64) -> Result<(), String> {
+    // ... mint tokens logic ...
+
+    // Call transfer method on icrc1_ledger canister
+    transfer(to, amount);
+
+    // Call balance_of method on icrc1_ledger canister
+    let balance = balance_of(to);
+    println!("Balance of {:#?}: {:#?}", to, balance.await);
+
+    Ok(())
+}
+
+#[ic_cdk::update]
+pub async fn create_user_record() -> (String, UserRecord) {
     let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
     // let request_body : String = String::from(r#"{"json":true,"code":"eosio.token","lower_bound":"XPR","upper_bound":"XPR","table":"accounts","scope":"tommccann","limit":1}"#);
     let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
@@ -95,7 +162,7 @@ async fn foo() -> (String, UserRecord) {
                 proton_account: String::from(""),
                 ic_principal: String::from(""),
                 amount: String::from(""),
-                utc_time: 0
+                utc_time: 0.to_string(),
             };
             match serde_json::from_str::<Value>(str_body) {
                 Ok(parsed) => {
@@ -144,7 +211,7 @@ async fn foo() -> (String, UserRecord) {
                     // Access the second record in the array and retrieve the Amount
                     if let Some(amount) = parsed["rows"][1]["utc_time"].as_u64() {
                         ic_cdk::api::print(format!("Amount from the second record: {}", amount));
-                        new_user_record.utc_time = amount;
+                        new_user_record.utc_time = amount.to_string();
                     } else {
                         ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the second record"));
                     }
@@ -163,7 +230,12 @@ async fn foo() -> (String, UserRecord) {
                 "{}", str_body
             );
             ic_cdk::api::print(format!("{:#?}", new_user_record));
-            return (result, new_user_record)
+            // let working_object = new_user_record;
+            let new_user_record = display_working_proton(new_user_record);
+            let new_user_record = display_working_principal(new_user_record.0);
+            let new_user_record = display_working_amount(new_user_record.0);
+            let new_user_record = display_working_utc(new_user_record.0);
+            return (result, new_user_record.0)
         }
         Err((r, m)) => {
             let message =
@@ -174,12 +246,44 @@ async fn foo() -> (String, UserRecord) {
                 proton_account: String::from(""),
                 ic_principal: String::from(""),
                 amount: String::from(""),
-                utc_time: 0
+                utc_time: String::from(""),
             };
             return (message, empty_user_record)
         }
     }
 
+}
+
+#[ic_cdk::query]
+fn display_working_proton(working_object: UserRecord) -> (UserRecord, String) {
+    let string_to_display: &str = &working_object.proton_account.clone();
+    ic_cdk::api::print(format!("{:#?}", string_to_display));
+    println!("{}", string_to_display);
+    return (working_object, string_to_display.to_string())
+}
+
+#[ic_cdk::query]
+fn display_working_principal(working_object: UserRecord) -> (UserRecord, String) {
+    let string_to_display = working_object.ic_principal.clone();
+    ic_cdk::api::print(format!("{:#?}", string_to_display));
+    println!("{}", string_to_display);
+    return (working_object, string_to_display.to_string())
+}
+
+#[ic_cdk::query]
+fn display_working_amount(working_object: UserRecord) -> (UserRecord, String) {
+    let string_to_display = working_object.amount.clone();
+    ic_cdk::api::print(format!("{:#?}", string_to_display));
+    println!("{}", string_to_display);
+    return (working_object, string_to_display.to_string())
+}
+
+#[ic_cdk::query]
+fn display_working_utc(working_object: UserRecord) -> (UserRecord, String) {
+    let string_to_display = working_object.utc_time.clone();
+    ic_cdk::api::print(format!("{:#?}", string_to_display));
+    println!("{}", string_to_display);
+    return (working_object, string_to_display.to_string())
 }
 
 #[ic_cdk::query]

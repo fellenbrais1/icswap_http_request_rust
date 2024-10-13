@@ -2,9 +2,18 @@ type UserRecord = record {
     proton_account: text;
     ic_principal: text;
     amount: text;
-    utc_time: nat64;
+    utc_time: text;
 };
 
 service : {
-    "foo": () -> (text, UserRecord);
+    "main": () -> (principal);
+    "set_up_transfer_id": () -> (principal);
+    "transfer": (principal, nat64) -> (opt text);
+    "balance_of": (principal) -> (opt text);
+    "mint_tokens": (principal, nat64) -> (opt text);
+    "create_user_record": () -> (text, UserRecord);
+    "display_working_proton": (UserRecord) -> (UserRecord, text);
+    "display_working_principal": (UserRecord) -> (UserRecord, text);
+    "display_working_amount": (UserRecord) -> (UserRecord, text);
+    "display_working_utc": (UserRecord) -> (UserRecord, text);
 }
