@@ -1,5 +1,4 @@
-// use ic_cdk::api::call::CallResult;
-// use candid::{CandidType, Deserialize};
+use candid::CandidType;
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,
     TransformContext, TransformFunc,
@@ -7,21 +6,16 @@ use ic_cdk::api::management_canister::http_request::{
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 
-
-// This struct is legacy code and is not really used in the code.
-#[derive(Serialize, Deserialize)]
-struct Context {
-    bucket_start_time_index: usize,
-    closing_price_index: usize,
+#[derive(Serialize, Deserialize, CandidType, Debug)]
+struct UserRecord {
+    proton_account: String,
+    ic_principal: String,
+    amount: String,
+    utc_time: u64,
 }
 
-// #[ic_cdk::query]
-// fn greet(name: String) -> String {
-//     format!("Hello, {}!", name)
-// }
-
 #[ic_cdk::update]
-async fn foo() -> String {
+async fn foo() -> (String, UserRecord) {
     let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
     // let request_body : String = String::from(r#"{"json":true,"code":"eosio.token","lower_bound":"XPR","upper_bound":"XPR","table":"accounts","scope":"tommccann","limit":1}"#);
     let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
@@ -48,15 +42,15 @@ async fn foo() -> String {
         },
     ];
 
-    // prepare the request_body
+    // Prepare the request_body
     let json_utf8: Vec<u8> = request_body.into_bytes();
     let request_body_vec: Option<Vec<u8>> = Some(json_utf8);
 
     let request = CanisterHttpRequestArgument {
         url: request_url.clone(),
         method: HttpMethod::POST,
-        body: request_body_vec,               //optional for request
-        max_response_bytes: None, //optional for request
+        body: request_body_vec,   // Optional for request
+        max_response_bytes: None, // Optional for request
         transform: Some(TransformContext {
             // The "method" parameter needs to have the same name as the function name of your transform function
             function: TransformFunc(candid::Func {
@@ -70,8 +64,7 @@ async fn foo() -> String {
         headers: request_headers,
     };
 
-    //Note: in Rust, `http_request()` already sends the cycles needed
-    //so no need for explicit Cycles.add() as in Motoko
+    //Note: in Rust, `http_request()` already sends the cycles needed, so there is no need for explicit Cycles.add() as in Motoko
     match http_request(request, 21_850_258_000).await {
         //4. DECODE AND RETURN THE RESPONSE
 
@@ -98,13 +91,62 @@ async fn foo() -> String {
             // SERDE
             // Parse the JSON string
             let str_body: &str = string_body.as_str();
+            let mut new_user_record = UserRecord {
+                proton_account: String::from(""),
+                ic_principal: String::from(""),
+                amount: String::from(""),
+                utc_time: 0
+            };
             match serde_json::from_str::<Value>(str_body) {
                 Ok(parsed) => {
                     // Access the second record in the array and retrieve the Amount
-                    if let Some(amount) = parsed["rows"][1]["utc_time"].as_i64() {
+                    if let Some(amount) = parsed["rows"][1]["proton_account"].as_str() {
                         ic_cdk::api::print(format!("Amount from the second record: {}", amount));
+                        new_user_record.proton_account = amount.to_string();
                     } else {
-                        ic_cdk::api::print(format!("Failed to retrieve Amount from the second record"));
+                        ic_cdk::api::print(format!("Failed to retrieve proton_account from the second record"));
+                    }
+                }
+                Err(e) => {
+                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
+                }
+            }
+            match serde_json::from_str::<Value>(str_body) {
+                Ok(parsed) => {
+                    // Access the second record in the array and retrieve the Amount
+                    if let Some(amount) = parsed["rows"][1]["ic_principal"].as_str() {
+                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
+                        new_user_record.ic_principal = amount.to_string();
+                    } else {
+                        ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the second record"));
+                    }
+                }
+                Err(e) => {
+                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
+                }
+            }
+            match serde_json::from_str::<Value>(str_body) {
+                Ok(parsed) => {
+                    // Access the second record in the array and retrieve the Amount
+                    if let Some(amount) = parsed["rows"][1]["amount"].as_str() {
+                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
+                        new_user_record.amount = amount.to_string();
+                    } else {
+                        ic_cdk::api::print(format!("Failed to retrieve 'amount' from the second record"));
+                    }
+                }
+                Err(e) => {
+                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
+                }
+            }
+            match serde_json::from_str::<Value>(str_body) {
+                Ok(parsed) => {
+                    // Access the second record in the array and retrieve the Amount
+                    if let Some(amount) = parsed["rows"][1]["utc_time"].as_u64() {
+                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
+                        new_user_record.utc_time = amount;
+                    } else {
+                        ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the second record"));
                     }
                 }
                 Err(e) => {
@@ -112,9 +154,7 @@ async fn foo() -> String {
                 }
             }
             // END SERDE
-
-
-
+        
             //The API response will looks like this:
             // { successful: true }
 
@@ -122,14 +162,21 @@ async fn foo() -> String {
             let result: String = format!(
                 "{}", str_body
             );
-            result
+            ic_cdk::api::print(format!("{:#?}", new_user_record));
+            return (result, new_user_record)
         }
         Err((r, m)) => {
             let message =
                 format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
 
             //Return the error as a string and end the method
-            message
+            let empty_user_record = UserRecord {
+                proton_account: String::from(""),
+                ic_principal: String::from(""),
+                amount: String::from(""),
+                utc_time: 0
+            };
+            return (message, empty_user_record)
         }
     }
 

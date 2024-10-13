@@ -1,3 +1,10 @@
+type UserRecord = record {
+    proton_account: text;
+    ic_principal: text;
+    amount: text;
+    utc_time: nat64;
+};
+
 service : {
-    "foo": () -> (text);
+    "foo": () -> (text, UserRecord);
 }

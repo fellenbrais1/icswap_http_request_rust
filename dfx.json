@@ -4,6 +4,11 @@
       "candid": "src/freeos_swap_rust_backend/freeos_swap_rust_backend.did",
       "package": "freeos_swap_rust_backend",
       "type": "rust"
+    },
+    "icrc1_ledger": {
+      "type": "custom",
+      "candid": "src/canisters/lift/icrc1_ledger.did",
+      "wasm": "src/canisters/lift/icrc1_ledger.wasm.gz"
     }
   },
   "defaults": {
