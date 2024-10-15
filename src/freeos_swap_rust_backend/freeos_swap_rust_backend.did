@@ -5,11 +5,35 @@ type UserRecord = record {
     utc_time: text;
 };
 
+type Subaccount = record {nat8; nat32};
+
+type Account = record {
+    owner: principal;
+    subaccount: opt Subaccount;
+};
+
+type Memo = record {
+    memo: text;
+};
+
+type TransferArg = record {
+    from_subaccount: opt Subaccount;
+    to: Account;
+    fee: opt NumTokens;
+    created_at_time: opt nat64;
+    memo: opt Memo;
+    amount: NumTokens;
+};
+
+type BlockIndex = nat;
+
+type NumTokens = nat;
+
 service : {
     "main": () -> (principal);
     "set_up_transfer_id": () -> (principal);
-    "transfer": (principal, nat64) -> (opt text);
-    "balance_of": (principal) -> (opt text);
+    "transfer": (TransferArg) -> (opt NumTokens);
+    "balance_of": (Account) -> (opt NumTokens);
     "mint_tokens": (principal, nat64) -> (opt text);
     "create_user_record": () -> (text, UserRecord);
     "display_working_proton": (UserRecord) -> (UserRecord, text);

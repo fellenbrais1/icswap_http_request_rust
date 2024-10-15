@@ -1,84 +1,156 @@
 use ic_cdk::api::call;
 use candid::CandidType;
-use candid::Blob;
 use candid::Principal;
+use candid::Nat;
+// use bytes::{Bytes, BytesMut, Buf, BufMut};
 use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
+// use std::clone;
+// use std::ptr::addr_of;
+use std::str::FromStr;
+// use chrono::prelude::*;
+// use candid::encode_args;
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
-struct UserRecord {
+pub struct UserRecord {
     proton_account: String,
     ic_principal: String,
     amount: String,
     utc_time: String,
 }
 
-type Tokens = u64;
+pub type Subaccount = [u8; 32];
 
-#[derive(CandidType)]
-struct MyData {
-    blob_field: Blob,
+#[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
+pub struct Account {
+    pub owner: Principal,
+    pub subaccount: Option<Subaccount>,
 }
 
-struct Account {
-    owner: Principal,
-    subaccount: opt SubAccount,
+#[derive(Clone, Deserialize, CandidType, Debug)]
+// pub struct Memo(pub BytesMut);
+pub struct Memo {
+    pub memo: String,
+} 
+
+#[derive(Clone, CandidType, Debug)]
+pub struct TransferArg {
+    pub from_subaccount: Option<Subaccount>,
+    pub to: Account,
+    pub fee: Option<NumTokens>,
+    pub created_at_time: Option<u64>,
+    pub memo: Option<Memo>,
+    pub amount: NumTokens,
 }
 
-#[derive(CandidType, Deserialize, Serialize)]
-struct TransferArg {
-    from_subaccount: opt SubAccount,
-    to: Account,
-    amount: Tokens,
-    fee: opt Tokens,
-    memo: opt blob,
-    created_at_time: opt Timestamp,
-};
+#[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
+pub enum TransferError {
+    BadFee {
+        expected_fee: NumTokens,
+    },
+    BadBurn {
+        min_burn_amount: NumTokens,
+    },
+    InsufficientFunds {
+        balance: NumTokens,
+    },
+    TooOld,
+    CreatedInFuture {
+        ledger_time: u64,
+    },
+    TemporarilyUnavailable,
+    Duplicate {
+        duplicate_of: BlockIndex,
+    },
+    GenericError {
+        error_code: Nat,
+        message: String,
+    },
+}
+
+pub type BlockIndex = Nat;
+
+pub type NumTokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
-// static megastring: String = ICRC1_LEDGER_CANISTER_ID.to_string();
+static mut TRANSFER_FEE: &str = "100";
 
 #[ic_cdk::update]
-pub fn main() -> Principal {
+pub async fn main() -> Principal {
     let working_transfer_id = set_up_transfer_id();
-    return working_transfer_id
-}
+    
+    // let utc_now = Utc::now();
+    // let timestamp: u64 = utc_now.timestamp() as u64;
 
-#[ic_cdk::update]
-pub fn set_up_transfer_id() -> Principal {
-    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-    println!("{}", working_transfer_id);
-    ic_cdk::api::print(format!("The working transfer id is: {}", working_transfer_id));
-    working_transfer_id
-}
+    // let transient_transfer_fee = addr_of!(TRANSFER_FEE) as u64;
+    // let working_transfer_fee = NumTokens::from(transient_transfer_fee);
+    let foobar: u64 = 100;
+    let working_transfer_fee = NumTokens::from(foobar);
+    let to = Principal::from_str("w7x3r-cok77-xa").unwrap();
+    let amount = 100000;
+    let who = Principal::from_text("w7x3r-cok77-xa").unwrap();
+    // let account_balance = balance_of(who);
+    let mut balance = balance_of(who).await;
+    // let tranfer_result = transfer(to, amount, working_transfer_fee, timestamp);
+    let result = transfer(to, amount, working_transfer_fee.clone()).await;
+    balance = balance_of(who).await;
+    let mint_result = mint_tokens(to, amount, working_transfer_fee.clone()).await;
+    return working_transfer_id;
 
-#[ic_cdk::update]
-pub async fn transfer(to: candid::Principal, amount: u64) -> Result<(), String> {
-    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-    let result: Result<(), _> = call::call(working_transfer_id, "transfer", (to, amount)).await;
-    result.map_err(|err| format!("Transfer failed: {:?}", err))
-}
+    #[ic_cdk::update]
+    pub fn set_up_transfer_id() -> Principal {
+        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+        println!("{}", working_transfer_id);
+        ic_cdk::api::print(format!("The working transfer id is: {}", working_transfer_id));
+        working_transfer_id
+    }
 
-#[ic_cdk::query]
-pub async fn balance_of(who: Principal) -> Result<(), String> {
-    let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-    let result: Result<(), _> = call::call(working_transfer_id, "balance_of", (who,)).await;
-    result.map_err(|err| format!("Balance query failed: {:?}", err))
-}
+    #[ic_cdk::query]
+    pub async fn balance_of(who: Principal) -> Result<(), String> {
+        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+        let transfer_account = Account {
+            owner: who,
+            subaccount: None,
+        };
+        let result: Result<(), _> = call::call(working_transfer_id, "balance_of",(transfer_account.clone(), )).await;
+        ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, result));
+        result.map_err(|err| format!("Balance query failed: {:?}", err))
+    }
 
-#[ic_cdk::update]
-pub async fn mint_tokens(to: Principal, amount: u64) -> Result<(), String> {
-    // ... mint tokens logic ...
+    #[ic_cdk::update]
+    pub async fn transfer(to: candid::Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
+        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+        let transfer_account = Account {
+            owner: to,
+            subaccount: None,
+        };
+        let transfer_info = TransferArg {
+            from_subaccount: None,
+            to: transfer_account,
+            fee: Some(working_transfer_fee),
+            created_at_time: None,
+            memo: None,
+            amount: NumTokens::from(amount),
+        };
+        let result: Result<(), _> = call::call(working_transfer_id, "transfer", (transfer_info.clone(), )).await;
+        ic_cdk::api::print(format!("{} has been moved to {}", transfer_info.amount, working_transfer_id));
+        result.map_err(|err| format!("Transfer failed: {:?}", err))
+    }
 
-    // Call transfer method on icrc1_ledger canister
-    transfer(to, amount);
-
-    // Call balance_of method on icrc1_ledger canister
-    let balance = balance_of(to);
-    println!("Balance of {:#?}: {:#?}", to, balance.await);
-
-    Ok(())
+    #[ic_cdk::update]
+    pub async fn mint_tokens(to: candid::Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
+        // ... mint tokens logic ...
+    
+        // Call transfer method on icrc1_ledger canister
+        let result = transfer(to, amount, working_transfer_fee).await;
+    
+        // Call balance_of method on icrc1_ledger canister
+        let balance = balance_of(to);
+        println!("Balance of {:#?}: {:#?}", to, balance.await);
+    
+        Ok(())
+    }
 }
 
 #[ic_cdk::update]
