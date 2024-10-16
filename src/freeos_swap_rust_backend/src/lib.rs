@@ -108,18 +108,23 @@ pub async fn main() -> Principal {
 
     #[ic_cdk::query]
     pub async fn balance_of(who: Principal) -> Result<(), String> {
+        ic_cdk::api::print(format!("Line 0"));
         let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+        ic_cdk::api::print(format!("Line 1"));
         let transfer_account = Account {
             owner: who,
             subaccount: None,
         };
+        ic_cdk::api::print(format!("Line 2"));
         let result: Result<(), _> = call::call(working_transfer_id, "balance_of",(transfer_account.clone(), )).await;
+        ic_cdk::api::print(format!("Line 3"));
         ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, result));
+        ic_cdk::api::print(format!("Line 4"));
         result.map_err(|err| format!("Balance query failed: {:?}", err))
     }
 
     #[ic_cdk::update]
-    pub async fn transfer(to: candid::Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
+    pub async fn transfer(to: Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
         let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
         let transfer_account = Account {
             owner: to,
