@@ -11,6 +11,14 @@ use serde_json::{self, Value};
 use std::str::FromStr;
 // use chrono::prelude::*;
 // use candid::encode_args;
+use std::error::Error;
+
+// This struct is legacy code and is not really used in the code.
+#[derive(Serialize, Deserialize)]
+struct Context {
+    bucket_start_time_index: usize,
+    closing_price_index: usize,
+}
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
@@ -38,22 +46,22 @@ pub struct Memo {
 pub struct TransferArg {
     pub from_subaccount: Option<Subaccount>,
     pub to: Account,
-    pub fee: Option<NumTokens>,
+    pub fee: Option<Tokens>,
     pub created_at_time: Option<u64>,
     pub memo: Option<Memo>,
-    pub amount: NumTokens,
+    pub amount: Tokens,
 }
 
 #[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
 pub enum TransferError {
     BadFee {
-        expected_fee: NumTokens,
+        expected_fee: Tokens,
     },
     BadBurn {
-        min_burn_amount: NumTokens,
+        min_burn_amount: Tokens,
     },
     InsufficientFunds {
-        balance: NumTokens,
+        balance: Tokens,
     },
     TooOld,
     CreatedInFuture {
@@ -71,22 +79,206 @@ pub enum TransferError {
 
 pub type BlockIndex = Nat;
 
-pub type NumTokens = Nat;
+pub type Tokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
 static mut TRANSFER_FEE: &str = "100";
 
+async fn get_table_rows(contract : String, start_utc_time: i64, end_utc_time : i64, num_rows : i32) -> Result<String, Box<dyn Error>> {
+    let request_url : String = String::from("https://xxapi-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
+
+    let request_body: String = format!(
+        r#"{{"json":true,"code":"{}","lower_bound":{},"upper_bound":{},"table":"swaps","scope":"freeosgov2","limit":{}}}"#,
+        contract, start_utc_time, end_utc_time, num_rows
+    );
+
+    let host = request_url.split('/').nth(2).unwrap_or_default().to_string();
+
+    let request_headers = vec![
+        HttpHeader {
+            name: "Host".to_string(),
+            value: host,
+        },
+        HttpHeader {
+            name: "User-Agent".to_string(),
+            value: "IC-Agent".to_string(),
+        },
+        HttpHeader {
+            name: "Content-Type".to_string(),
+            value: "application/json".to_string(),
+        },
+    ];
+
+    // prepare the request_body
+    let json_utf8: Vec<u8> = request_body.into_bytes();
+    let request_body_vec: Option<Vec<u8>> = Some(json_utf8);
+
+    let request = CanisterHttpRequestArgument {
+        url: request_url.clone(),
+        method: HttpMethod::POST,
+        body: request_body_vec,               //optional for request
+        max_response_bytes: None, //optional for request
+        transform: Some(TransformContext {
+            // The "method" parameter needs to have the same name as the function name of your transform function
+            function: TransformFunc(candid::Func {
+                principal: ic_cdk::api::id(),
+                method: "clean_dynamic_content".to_string(),
+            }),
+            // The "TransformContext" function does need a context parameter, it can be empty
+            context: vec![],
+        }),
+        // transform: None,
+        headers: request_headers,
+    };
+
+    //Note: in Rust, `http_request()` already sends the cycles needed
+    //so no need for explicit Cycles.add() as in Motoko
+    match http_request(request, 21_850_258_000).await {
+        //4. DECODE AND RETURN THE RESPONSE
+
+        //See:https://docs.rs/ic-cdk/latest/ic_cdk/api/management_canister/http_request/struct.HttpResponse.html
+        Ok((response,)) => {
+            let string_body = String::from_utf8(response.body)
+                .expect("Transformed response is not UTF-8 encoded.");
+            // ic_cdk::api::print(format!("About to return {:?}", string_body));
+
+            Ok(string_body)
+        }
+        Err((r, m)) => {
+            let message =
+                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
+
+            //Return the error as a string and end the method
+            Err(message.into())
+        }
+    }
+
+}
+
+#[ic_cdk::update]
+pub async fn autorun() -> () {
+    let ledger_id: Principal = set_up_transfer_id();
+    let foobar: u64 = 100;
+    let working_transfer_fee = Tokens::from(foobar);
+    let to_str = "aaaaa-aa";
+    let to = Principal::from_str(to_str);
+    // let to = Principal::from_str("w7x3r-cok77-xa");
+    // let mut to_principal: Principal;
+
+    let to_principal = to.map_err(|err| format!("Error parsing to principal: {}", err)).unwrap();
+
+    // match to {
+    //     Ok(principal) => {
+    //         println!("Valid principal: {}", principal);
+    //         to_principal = principal;
+    //     }
+    //     Err(error) => {
+    //         eprintln!("Error parsing principal: {}", error);
+    //     }
+    // }
+    let amount = 100000;
+    let who_str = "aaaaa-aa";
+    let who = Principal::from_str(who_str);
+
+    let who_principal = who.map_err(|err| format!("Error parsing to principal: {}", err)).unwrap();
+
+    // let mut who_principal: Principal;
+    // match who {
+    //     Ok(principal) => {
+    //         println!("Valid principal: {}", principal);
+    //         who_principal = principal;
+    //     }
+    //     Err(error) => {
+    //         eprintln!("Error parsing principal: {}", error);
+    //     }
+    // }
+    // let account_balance = balance_of(who);
+    let mut balance = balance_of(who_principal).await;
+    // let tranfer_result = transfer(to, amount, working_transfer_fee, timestamp);
+    let result = transfer(to_principal, amount, working_transfer_fee.clone()).await;
+    balance = balance_of(who_principal).await;
+    let mint_result = mint_tokens(to_principal, amount, working_transfer_fee.clone()).await;
+}
+
+#[ic_cdk::update]
+pub fn set_up_transfer_id() -> Principal {
+    let ledger_id = Principal::from_text("mxzaz-hqaaa-aaaar-qaada-cai").unwrap();
+    println!("{}", ledger_id);
+    ic_cdk::api::print(format!("The ledger id is: {}", ledger_id));
+    ledger_id
+}
+
+#[ic_cdk::update]
+pub async fn balance_of(who: Principal) {
+    let ledger_id = Principal::from_str("mxzaz-hqaaa-aaaar-qaada-cai").unwrap();
+    let mut user_balance: Nat = candid::Nat::from(0u32);
+    let transfer_account = Account {
+        owner: who,
+        subaccount: None,
+    };
+    let result: Result<(Nat,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account.clone(),)).await;
+
+    match result {
+        Ok((balance, )) => {
+            // Handle the successful case
+            ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, balance));
+            user_balance = balance;
+        }
+        Err(err) => {
+            // Handle the error case
+            eprintln!("Balance query failed: {:?}", err);
+        }
+    }
+    
+    ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, user_balance));
+    // result.map_err(|err| format!("Balance query failed: {:?}", err))
+}
+
+#[ic_cdk::update]
+pub async fn transfer(to: Principal, amount: u64, working_transfer_fee: Tokens) -> Result<(), String> {
+    let ledger_id = Principal::from_str("mxzaz-hqaaa-aaaar-qaada-cai").unwrap();
+    let transfer_account = Account {
+        owner: to,
+        subaccount: None,
+    };
+    let transfer_info = TransferArg {
+        from_subaccount: None,
+        to: transfer_account,
+        fee: Some(working_transfer_fee),
+        created_at_time: None,
+        memo: None,
+        amount: Tokens::from(amount),
+    };
+    let result: Result<(), _> = call::call(ledger_id, "icrc1_transfer", (transfer_info.clone(), )).await;
+    ic_cdk::api::print(format!("{} has been moved to {}", transfer_info.amount, ledger_id));
+    result.map_err(|err| format!("Transfer failed: {:?}", err))
+}
+
+#[ic_cdk::update]
+pub async fn mint_tokens(to: candid::Principal, amount: u64, working_transfer_fee: Tokens) -> Result<(), String> {
+    // ... mint tokens logic ...
+
+    // Call transfer method on icrc1_ledger canister
+    let result = transfer(to, amount, working_transfer_fee).await;
+
+    // Call balance_of method on icrc1_ledger canister
+    let balance = balance_of(to);
+    println!("Balance of {:#?}: {:#?}", to, balance.await);
+
+    Ok(())
+}
+
 #[ic_cdk::update]
 pub async fn main() -> Principal {
     let working_transfer_id = set_up_transfer_id();
-    
+
     // let utc_now = Utc::now();
     // let timestamp: u64 = utc_now.timestamp() as u64;
 
     // let transient_transfer_fee = addr_of!(TRANSFER_FEE) as u64;
     // let working_transfer_fee = NumTokens::from(transient_transfer_fee);
     let foobar: u64 = 100;
-    let working_transfer_fee = NumTokens::from(foobar);
+    let working_transfer_fee = Tokens::from(foobar);
     let to = Principal::from_str("w7x3r-cok77-xa").unwrap();
     let amount = 100000;
     let who = Principal::from_text("w7x3r-cok77-xa").unwrap();
@@ -97,65 +289,6 @@ pub async fn main() -> Principal {
     balance = balance_of(who).await;
     let mint_result = mint_tokens(to, amount, working_transfer_fee.clone()).await;
     return working_transfer_id;
-
-    #[ic_cdk::update]
-    pub fn set_up_transfer_id() -> Principal {
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        println!("{}", working_transfer_id);
-        ic_cdk::api::print(format!("The working transfer id is: {}", working_transfer_id));
-        working_transfer_id
-    }
-
-    #[ic_cdk::query]
-    pub async fn balance_of(who: Principal) -> Result<(), String> {
-        ic_cdk::api::print(format!("Line 0"));
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        ic_cdk::api::print(format!("Line 1"));
-        let transfer_account = Account {
-            owner: who,
-            subaccount: None,
-        };
-        ic_cdk::api::print(format!("Line 2"));
-        let result: Result<(), _> = call::call(working_transfer_id, "balance_of",(transfer_account.clone(), )).await;
-        ic_cdk::api::print(format!("Line 3"));
-        ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, result));
-        ic_cdk::api::print(format!("Line 4"));
-        result.map_err(|err| format!("Balance query failed: {:?}", err))
-    }
-
-    #[ic_cdk::update]
-    pub async fn transfer(to: Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        let transfer_account = Account {
-            owner: to,
-            subaccount: None,
-        };
-        let transfer_info = TransferArg {
-            from_subaccount: None,
-            to: transfer_account,
-            fee: Some(working_transfer_fee),
-            created_at_time: None,
-            memo: None,
-            amount: NumTokens::from(amount),
-        };
-        let result: Result<(), _> = call::call(working_transfer_id, "transfer", (transfer_info.clone(), )).await;
-        ic_cdk::api::print(format!("{} has been moved to {}", transfer_info.amount, working_transfer_id));
-        result.map_err(|err| format!("Transfer failed: {:?}", err))
-    }
-
-    #[ic_cdk::update]
-    pub async fn mint_tokens(to: candid::Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
-        // ... mint tokens logic ...
-    
-        // Call transfer method on icrc1_ledger canister
-        let result = transfer(to, amount, working_transfer_fee).await;
-    
-        // Call balance_of method on icrc1_ledger canister
-        let balance = balance_of(to);
-        println!("Balance of {:#?}: {:#?}", to, balance.await);
-    
-        Ok(())
-    }
 }
 
 #[ic_cdk::update]

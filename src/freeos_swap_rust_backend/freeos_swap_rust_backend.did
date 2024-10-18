@@ -19,21 +19,22 @@ type Memo = record {
 type TransferArg = record {
     from_subaccount: opt Subaccount;
     to: Account;
-    fee: opt NumTokens;
+    fee: opt Tokens;
     created_at_time: opt nat64;
     memo: opt Memo;
-    amount: NumTokens;
+    amount: Tokens;
 };
 
 type BlockIndex = nat;
 
-type NumTokens = nat;
+type Tokens = nat;
 
 service : {
+    "autorun": () -> ();
     "main": () -> (principal);
     "set_up_transfer_id": () -> (principal);
-    "transfer": (TransferArg) -> (opt NumTokens);
-    "balance_of": (Account) -> (opt NumTokens);
+    "transfer": (TransferArg) -> (opt Tokens);
+    "balance_of": (principal) -> ();
     "mint_tokens": (principal, nat64) -> (opt text);
     "create_user_record": () -> (text, UserRecord);
     "display_working_proton": (UserRecord) -> (UserRecord, text);
