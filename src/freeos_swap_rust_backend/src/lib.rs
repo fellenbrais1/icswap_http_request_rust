@@ -1,169 +1,19 @@
-use ic_cdk::api::call;
 use candid::CandidType;
-use candid::Principal;
-use candid::Nat;
 use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
-use std::fmt::Error;
-use std::str::FromStr;
 use std::vec;
+
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
     proton_account: String,
     ic_principal: String,
-    amount: String,
-    utc_time: String,
-}
-
-pub type Subaccount = [u8; 32];
-
-#[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
-pub struct Account {
-    pub owner: Principal,
-    pub subaccount: Option<Subaccount>,
-}
-
-#[derive(Clone, Deserialize, CandidType, Debug)]
-pub struct Memo {
-    pub memo: String,
-} 
-
-#[derive(Clone, CandidType, Debug)]
-pub struct TransferArg {
-    pub from_subaccount: Option<Subaccount>,
-    pub recipient: Account,
-    pub fee: Option<NumTokens>,
-    pub created_at_time: Option<u64>,
-    pub memo: Option<Memo>,
-    pub amount: NumTokens,
-}
-
-#[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
-pub enum TransferError {
-    BadFee {
-        expected_fee: NumTokens,
-    },
-    BadBurn {
-        min_burn_amount: NumTokens,
-    },
-    InsufficientFunds {
-        balance: NumTokens,
-    },
-    TooOld,
-    CreatedInFuture {
-        ledger_time: u64,
-    },
-    TemporarilyUnavailable,
-    Duplicate {
-        duplicate_of: BlockIndex,
-    },
-    GenericError {
-        error_code: Nat,
-        message: String,
-    },
-}
-
-pub type BlockIndex = Nat;
-
-pub type NumTokens = Nat;
-
-const ICRC1_LEDGER_CANISTER_ID: &str = "bd3sg-teaaa-aaaaa-qaaba-cai";
-
-#[ic_cdk::update]
-pub async fn main() -> Principal {
-    let working_transfer_id = set_up_transfer_id();
-    let foobar: u64 = 100;
-    let working_transfer_fee = NumTokens::from(foobar);
-    let recipient = Principal::from_str("w7x3r-cok77-xa").unwrap();
-    let amount = 100000;
-    let sender = Principal::from_text("w7x3r-cok77-xa").unwrap();
-    let mut balance = balance_of(sender).await;
-    let result = transfer(recipient, amount, working_transfer_fee.clone()).await;
-    balance = balance_of(sender).await;
-    let mint_result = mint_tokens(recipient, amount, working_transfer_fee.clone()).await;
-    return working_transfer_id;
-
-    #[ic_cdk::update]
-    pub fn set_up_transfer_id() -> Principal {
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        println!("{}", working_transfer_id);
-        ic_cdk::api::print(format!("The working transfer id is: {}", working_transfer_id));
-        working_transfer_id
-    }
-
-    #[ic_cdk::update]
-    pub async fn balance_of(sender: Principal) {
-
-        // Improvement 1 - set up a variable to receive the balance value - .into() is required because literal 0 is an i32
-        let mut user_balance: Nat = candid::Nat::from(0u32);
-
-        ic_cdk::api::print(format!("Line 0"));
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        ic_cdk::api::print(format!("Line 1"));
-        let transfer_account = Account {
-            owner: sender,
-            subaccount: None,
-        };
-        ic_cdk::api::print(format!("Line 2"));
-
-        // Improvement 2 - Declare the successful return type as (Nat,)
-        let result: Result<(Nat,), _> = call::call(working_transfer_id, "icrc1_balance_of", (transfer_account.clone(),)).await;
-        // match result {
-        //     Ok(result) => {return (result, )},
-        //     Err(message) => println!("{:?}", message),
-        // };
-
-        match result {
-            Ok((balance,)) => {
-                user_balance = balance;
-                ic_cdk::api::print(format!("User balance: {}", user_balance));
-                ic_cdk::api::print(format!("Balance of {} is now {:#?}", transfer_account.owner, user_balance));
-            }
-            Err(err) => {
-                ic_cdk::api::print(format!("Error in icrc1_balance_of: {:?}", err));
-            }
-        }
-
-        ic_cdk::api::print(format!("Line 3"));
-    }
-
-    #[ic_cdk::update]
-    pub async fn transfer(recipient: Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
-        let working_transfer_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-        let transfer_account = Account {
-            owner: recipient,
-            subaccount: None,
-        };
-        let transfer_info = TransferArg {
-            from_subaccount: None,
-            recipient: transfer_account,
-            fee: Some(working_transfer_fee),
-            created_at_time: None,
-            memo: None,
-            amount: NumTokens::from(amount),
-        };
-        let result: Result<(), _> = call::call(working_transfer_id, "transfer", (transfer_info.clone(), )).await;
-        ic_cdk::api::print(format!("{} has been moved to {}", transfer_info.amount, working_transfer_id));
-        result.map_err(|err| format!("Transfer failed: {:?}", err))
-    }
-
-    #[ic_cdk::update]
-    pub async fn mint_tokens(recipient: candid::Principal, amount: u64, working_transfer_fee: NumTokens) -> Result<(), String> {
-    
-        // Call transfer method on icrc1_ledger canister
-        let result = transfer(recipient, amount, working_transfer_fee).await;
-    
-        // Call balance_of method on icrc1_ledger canister
-        let balance = balance_of(recipient);
-        println!("Balance of {:#?}: {:#?}", recipient, balance.await);
-    
-        Ok(())
-    }
+    amount: f32,
+    utc_time: u64,
 }
 
 #[ic_cdk::update]
-pub async fn create_user_record() -> (String, Vec<UserRecord>) {
+pub async fn create_user_record() -> String {
     let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
     let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
 
@@ -230,7 +80,6 @@ pub async fn create_user_record() -> (String, Vec<UserRecord>) {
                 .expect("Transformed response is not UTF-8 encoded.");
             ic_cdk::api::print(format!("{:?}", string_body));
 
-            let mut created_database: Vec<UserRecord> = Vec::new();
             // SERDE
             // Parse the JSON string
             let str_body: &str = string_body.as_str();
@@ -238,29 +87,18 @@ pub async fn create_user_record() -> (String, Vec<UserRecord>) {
                 Ok(parsed) => {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
-                        let record_name_str = format!("new_user_record_{}", counter);
-                        let mut record_name_str = UserRecord {
-                            proton_account: String::from(""),
-                            ic_principal: String::from(""),
-                            amount: String::from(""),
-                            utc_time: 0.to_string(),
-                        };
                         for row in rows {
                     // Access the second record in the array and retrieve the Amount
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
-                                // record_name_str.proton_account = proton_account.to_string();
                             } else {
-                                ic_cdk::api::print(format!("Failed to retrieve proton_account from the row"));
+                                ic_cdk::api::print(format!("Failed to retrieve 'proton_account' from the row"));
                             }
-                            // created_database.push(record_name_str);
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
-                                // record_name_str.proton_account = proton_account.to_string();
                             } else {
-                                ic_cdk::api::print(format!("Failed to retrieve ic_principal from the row"));
+                                ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
-                            // created_database.push(record_name_str);
                             if let Some(amount) = row["amount"].as_str() {
                                 let index = amount.find(" ");
 
@@ -269,24 +107,20 @@ pub async fn create_user_record() -> (String, Vec<UserRecord>) {
                                     let number: f32 = number_str.parse().unwrap();
                                     ic_cdk::api::print(format!("Amount from record {}: {}", counter, number));
                                 } else {
-                                    ic_cdk::api::print(format!("Failed to retrieve amount from the row"));
+                                    ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
                                 }
-                                // record_name_str.proton_account = proton_account.to_string();
                             } else {
-                                ic_cdk::api::print(format!("Failed to retrieve amount from the row"));
+                                ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
                             }
-                            // created_database.push(record_name_str);
                             if let Some(utc_time) = row["utc_time"].as_u64() {
                                 ic_cdk::api::print(format!("UTC Time from record {}: {}", counter, utc_time));
-                                // record_name_str.proton_account = proton_account.to_string();
                             } else {
-                                ic_cdk::api::print(format!("Failed to retrieve utc_time from the row"));
+                                ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the row"));
                             }
-                            // created_database.push(record_name_str);
                             counter += 1;
                         }
                     } else {
-                        ic_cdk::api::print(format!("Failed to retreive rows from the response"));
+                        ic_cdk::api::print(format!("Failed to retreive 'rows' from the response"));
                     }
                 }
                 Err(e) => {
@@ -302,59 +136,17 @@ pub async fn create_user_record() -> (String, Vec<UserRecord>) {
             let result: String = format!(
                 "{}", str_body
             );
-            for item in &created_database {
-                ic_cdk::api::print(format!("{:#?}", item));
-                println!("Proton_account of {:?} is {}", item, item.proton_account);
-            }
-            // let working_object = new_user_record;
-            // let new_user_record = display_working_proton(new_user_record);
-            // let new_user_record = display_working_principal(new_user_record.0);
-            // let new_user_record = display_working_amount(new_user_record.0);
-            // let new_user_record = display_working_utc(new_user_record.0);
-            return (result, created_database)
+
+            return result
         }
         Err((r, m)) => {
             let message =
                 format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
 
             //Return the error as a string and end the method
-            let empty_vec: Vec<UserRecord> = Vec::new();
-            return (message, empty_vec)
+            return message
         }
     }
-
-}
-
-#[ic_cdk::query]
-fn display_working_proton(working_object: UserRecord) -> (UserRecord, String) {
-    let string_to_display: &str = &working_object.proton_account.clone();
-    ic_cdk::api::print(format!("{:#?}", string_to_display));
-    println!("{}", string_to_display);
-    return (working_object, string_to_display.to_string())
-}
-
-#[ic_cdk::query]
-fn display_working_principal(working_object: UserRecord) -> (UserRecord, String) {
-    let string_to_display = working_object.ic_principal.clone();
-    ic_cdk::api::print(format!("{:#?}", string_to_display));
-    println!("{}", string_to_display);
-    return (working_object, string_to_display.to_string())
-}
-
-#[ic_cdk::query]
-fn display_working_amount(working_object: UserRecord) -> (UserRecord, String) {
-    let string_to_display = working_object.amount.clone();
-    ic_cdk::api::print(format!("{:#?}", string_to_display));
-    println!("{}", string_to_display);
-    return (working_object, string_to_display.to_string())
-}
-
-#[ic_cdk::query]
-fn display_working_utc(working_object: UserRecord) -> (UserRecord, String) {
-    let string_to_display = working_object.utc_time.clone();
-    ic_cdk::api::print(format!("{:#?}", string_to_display));
-    println!("{}", string_to_display);
-    return (working_object, string_to_display.to_string())
 }
 
 #[ic_cdk::query]
@@ -362,7 +154,6 @@ fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
     let mut response = args.response;
 
     // Filter out the 'Date' header from the headers
-    //response.headers.retain(|header| header.name != "Date" && header.name != "CF-RAY" && header.name != "Report-To");
     response.headers.clear();
     
     // Return the cleaned response
