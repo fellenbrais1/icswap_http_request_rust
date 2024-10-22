@@ -247,8 +247,37 @@ pub async fn create_user_record() -> (String, Vec<UserRecord>) {
                         };
                         for row in rows {
                     // Access the second record in the array and retrieve the Amount
+                            if let Some(proton_account) = row["proton_account"].as_str() {
+                                ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
+                                // record_name_str.proton_account = proton_account.to_string();
+                            } else {
+                                ic_cdk::api::print(format!("Failed to retrieve proton_account from the row"));
+                            }
+                            // created_database.push(record_name_str);
+                            if let Some(ic_principal) = row["ic_principal"].as_str() {
+                                ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
+                                // record_name_str.proton_account = proton_account.to_string();
+                            } else {
+                                ic_cdk::api::print(format!("Failed to retrieve ic_principal from the row"));
+                            }
+                            // created_database.push(record_name_str);
+                            if let Some(amount) = row["amount"].as_str() {
+                                let index = amount.find(" ");
+
+                                if let Some(index) = index {
+                                    let number_str = &amount[..index];
+                                    let number: f32 = number_str.parse().unwrap();
+                                    ic_cdk::api::print(format!("Amount from record {}: {}", counter, number));
+                                } else {
+                                    ic_cdk::api::print(format!("Failed to retrieve amount from the row"));
+                                }
+                                // record_name_str.proton_account = proton_account.to_string();
+                            } else {
+                                ic_cdk::api::print(format!("Failed to retrieve amount from the row"));
+                            }
+                            // created_database.push(record_name_str);
                             if let Some(utc_time) = row["utc_time"].as_u64() {
-                                ic_cdk::api::print(format!("Amount from record{}: {}", counter, utc_time));
+                                ic_cdk::api::print(format!("UTC Time from record {}: {}", counter, utc_time));
                                 // record_name_str.proton_account = proton_account.to_string();
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve utc_time from the row"));
