@@ -36,7 +36,7 @@ service : {
     "transfer": (TransferArg) -> (opt Tokens);
     "balance_of": (principal) -> ();
     "mint_tokens": (principal, nat64, nat) -> (nat);
-    "create_user_record": () -> (text, UserRecord);
+    "create_user_record": () -> (text, vec UserRecord);
     "display_working_proton": (UserRecord) -> (UserRecord, text);
     "display_working_principal": (UserRecord) -> (UserRecord, text);
     "display_working_amount": (UserRecord) -> (UserRecord, text);

@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::fmt::Error;
 use std::str::FromStr;
+use std::vec;
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
     proton_account: String,
@@ -162,7 +163,7 @@ pub async fn main() -> Principal {
 }
 
 #[ic_cdk::update]
-pub async fn create_user_record() -> (String, UserRecord) {
+pub async fn create_user_record() -> (String, Vec<UserRecord>) {
     let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
     let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
 
@@ -229,65 +230,34 @@ pub async fn create_user_record() -> (String, UserRecord) {
                 .expect("Transformed response is not UTF-8 encoded.");
             ic_cdk::api::print(format!("{:?}", string_body));
 
+            let mut created_database: Vec<UserRecord> = Vec::new();
             // SERDE
             // Parse the JSON string
             let str_body: &str = string_body.as_str();
-            let mut new_user_record = UserRecord {
-                proton_account: String::from(""),
-                ic_principal: String::from(""),
-                amount: String::from(""),
-                utc_time: 0.to_string(),
-            };
             match serde_json::from_str::<Value>(str_body) {
                 Ok(parsed) => {
+                    if let Some(rows) = parsed["rows"].as_array() {
+                        let mut counter = 0;
+                        let record_name_str = format!("new_user_record_{}", counter);
+                        let mut record_name_str = UserRecord {
+                            proton_account: String::from(""),
+                            ic_principal: String::from(""),
+                            amount: String::from(""),
+                            utc_time: 0.to_string(),
+                        };
+                        for row in rows {
                     // Access the second record in the array and retrieve the Amount
-                    if let Some(amount) = parsed["rows"][1]["proton_account"].as_str() {
-                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
-                        new_user_record.proton_account = amount.to_string();
+                            if let Some(utc_time) = row["utc_time"].as_u64() {
+                                ic_cdk::api::print(format!("Amount from record{}: {}", counter, utc_time));
+                                // record_name_str.proton_account = proton_account.to_string();
+                            } else {
+                                ic_cdk::api::print(format!("Failed to retrieve utc_time from the row"));
+                            }
+                            // created_database.push(record_name_str);
+                            counter += 1;
+                        }
                     } else {
-                        ic_cdk::api::print(format!("Failed to retrieve proton_account from the second record"));
-                    }
-                }
-                Err(e) => {
-                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
-                }
-            }
-            match serde_json::from_str::<Value>(str_body) {
-                Ok(parsed) => {
-                    // Access the second record in the array and retrieve the Amount
-                    if let Some(amount) = parsed["rows"][1]["ic_principal"].as_str() {
-                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
-                        new_user_record.ic_principal = amount.to_string();
-                    } else {
-                        ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the second record"));
-                    }
-                }
-                Err(e) => {
-                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
-                }
-            }
-            match serde_json::from_str::<Value>(str_body) {
-                Ok(parsed) => {
-                    // Access the second record in the array and retrieve the Amount
-                    if let Some(amount) = parsed["rows"][1]["amount"].as_str() {
-                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
-                        new_user_record.amount = amount.to_string();
-                    } else {
-                        ic_cdk::api::print(format!("Failed to retrieve 'amount' from the second record"));
-                    }
-                }
-                Err(e) => {
-                    ic_cdk::api::print(format!("Failed to parse response body: {}", e));
-                }
-            }
-            match serde_json::from_str::<Value>(str_body) {
-                Ok(parsed) => {
-                    // Access the second record in the array and retrieve the Amount
-                    if let Some(amount) = parsed["rows"][1]["utc_time"].as_u64() {
-                        ic_cdk::api::print(format!("Amount from the second record: {}", amount));
-                        new_user_record.utc_time = amount.to_string();
-                    } else {
-                        ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the second record"));
+                        ic_cdk::api::print(format!("Failed to retreive rows from the response"));
                     }
                 }
                 Err(e) => {
@@ -303,26 +273,24 @@ pub async fn create_user_record() -> (String, UserRecord) {
             let result: String = format!(
                 "{}", str_body
             );
-            ic_cdk::api::print(format!("{:#?}", new_user_record));
+            for item in &created_database {
+                ic_cdk::api::print(format!("{:#?}", item));
+                println!("Proton_account of {:?} is {}", item, item.proton_account);
+            }
             // let working_object = new_user_record;
-            let new_user_record = display_working_proton(new_user_record);
-            let new_user_record = display_working_principal(new_user_record.0);
-            let new_user_record = display_working_amount(new_user_record.0);
-            let new_user_record = display_working_utc(new_user_record.0);
-            return (result, new_user_record.0)
+            // let new_user_record = display_working_proton(new_user_record);
+            // let new_user_record = display_working_principal(new_user_record.0);
+            // let new_user_record = display_working_amount(new_user_record.0);
+            // let new_user_record = display_working_utc(new_user_record.0);
+            return (result, created_database)
         }
         Err((r, m)) => {
             let message =
                 format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
 
             //Return the error as a string and end the method
-            let empty_user_record = UserRecord {
-                proton_account: String::from(""),
-                ic_principal: String::from(""),
-                amount: String::from(""),
-                utc_time: String::from(""),
-            };
-            return (message, empty_user_record)
+            let empty_vec: Vec<UserRecord> = Vec::new();
+            return (message, empty_vec)
         }
     }
 
