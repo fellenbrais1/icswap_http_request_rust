@@ -13,7 +13,7 @@ export TOKEN_NAME="Lift Cash"
 export TOKEN_SYMBOL="LIFT"
 # dfx identity use minter
 # export MINTER=$(dfx identity get-principal)
-export MINTER=bkyz2-fmaaa-aaaaa-qaaaq-cai
+export MINTER=bd3sg-teaaa-aaaaa-qaaba-cai
 export FEATURE_FLAGS=false
 # Write variables to .env file
 echo "PRE_MINTED_TOKENS=$PRE_MINTED_TOKENS" >> .env

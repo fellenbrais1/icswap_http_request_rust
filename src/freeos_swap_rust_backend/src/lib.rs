@@ -1,5 +1,6 @@
-use candid::CandidType;
+use candid::{CandidType, Nat, Principal};
 use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
+use ic_cdk::api::call::{self};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::vec;
@@ -11,6 +12,65 @@ pub struct UserRecord {
     amount: f32,
     utc_time: u64,
 }
+
+pub type Subaccount = [u8; 32];
+pub type Tokens = Nat;
+
+const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
+const MINTER_ID: &str = "bd3sg-teaaa-aaaaa-qaaba-cai";
+
+#[derive(Clone, Deserialize, CandidType, Debug)]
+pub struct Memo {
+    pub memo: String,
+} 
+
+#[derive(Clone, Serialize, Deserialize, CandidType, Debug, Copy)]
+pub struct Account {
+    pub owner: Principal,
+    pub subaccount: Option<Subaccount>,
+}
+
+#[derive(Clone, CandidType, Debug)]
+pub struct TransferArg {
+    pub from_subaccount: Option<Subaccount>,
+    pub to: Account,
+    pub fee: Option<Tokens>,
+    pub created_at_time: Option<u64>,
+    pub memo: Option<Memo>,
+    pub amount: Tokens,
+}
+
+pub struct TransferResult {
+    pub ok: BlockIndex,
+    pub err: TransferError,
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
+pub enum TransferError {
+    BadFee {
+        expected_fee: Tokens,
+    },
+    BadBurn {
+        min_burn_amount: Tokens,
+    },
+    InsufficientFunds {
+        balance: Tokens,
+    },
+    TooOld,
+    CreatedInFuture {
+        ledger_time: u64,
+    },
+    TemporarilyUnavailable,
+    Duplicate {
+        duplicate_of: BlockIndex,
+    },
+    GenericError {
+        error_code: Nat,
+        message: String,
+    },
+}
+
+pub type BlockIndex = Nat;
 
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {
@@ -159,3 +219,91 @@ fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
     // Return the cleaned response
     response
 }
+
+#[ic_cdk::update]
+pub async fn balance_of(principal_to_check: Principal) -> (String, Nat) {
+    let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+    // let mut user_balance: Nat = candid::Nat::from(0u32);
+    let transfer_account = Account {
+        owner: principal_to_check,
+        subaccount: None,
+    };
+    let result: Result<(Nat,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account,)).await;
+
+    match result {
+        Ok((balance, )) => {
+            let print_string = format!("Balance of {}: {}", &transfer_account.owner, balance.to_string());
+            ic_cdk::api::print(format!("{}", print_string));
+            let user_balance = balance;
+            return (print_string, user_balance)
+        }
+        Err(err) => {
+            let print_string = format!("Balance query failed: {:?}", err);
+            eprintln!("{}", print_string);
+            let user_balance: Nat = candid::Nat::from(0u32);
+            return (print_string, user_balance)
+        }
+    }
+}
+
+#[ic_cdk::update]
+pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, Nat) {
+    let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
+    let transfer_account = Account {
+        owner: recipient,
+        subaccount: None,
+    };
+    let transfer_info = TransferArg {
+        from_subaccount: None,
+        to: transfer_account,
+        fee: Some(transfer_fee),
+        created_at_time: None,
+        memo: None,
+        amount: Tokens::from(amount),
+    };
+    let call_result: Result<(Result<BlockIndex, TransferError>,), _> = call::call(ledger_id, "icrc1_transfer", (transfer_info, )).await;
+    
+    match call_result {
+        Ok((inner_result,)) => {
+            match inner_result {
+                Ok(block_index) => {
+                    let balance = balance_of(recipient).await;
+                    let balance_to_print = balance.1;
+                    let print_string = format!("Transfer successful for {} with block index: {}, New balance is now: {}", &transfer_account.owner, block_index.to_string(), balance_to_print);
+                    ic_cdk::api::print(&print_string);
+                    return (print_string, balance_to_print)
+                }
+                Err(transfer_error) => {
+                    let unchanged_balance = balance_of(recipient).await;
+                    let balance_to_print = unchanged_balance.1;
+                    let print_string = format!("Transfer failed with error: {:?}, balance of {} remains at: {}", transfer_error, recipient, balance_to_print);
+                    ic_cdk::api::print(&print_string);
+                    return (print_string, balance_to_print)
+                }
+            }
+        }
+        Err(err) => {
+            let unchanged_balance = balance_of(recipient).await;
+            let balance_to_print = unchanged_balance.1;
+            let print_string = format!("Inter-canister call failed: {:?}, balance of {} remains at: {}", err, recipient, balance_to_print);
+            ic_cdk::api::print(&print_string);
+            return (print_string, balance_to_print)
+        }
+    }
+}
+
+// #[ic_cdk::update]
+// pub async fn mint_tokens(recipient: Principal, amount: u64, working_transfer_fee: Tokens) -> (String, Nat) {
+
+//     // Call transfer method on icrc1_ledger canister
+//     let balance = transfer(to, amount, working_transfer_fee).await;
+    
+
+//     // Call balance_of method on icrc1_ledger canister
+//     let balance = balance_of(to).await;
+//     println!("Balance of {:#?}: {:#?}", to, balance);
+
+//     return balance
+// }
+
+// old MINTER export MINTER=bkyz2-fmaaa-aaaaa-qaaaq-cai
