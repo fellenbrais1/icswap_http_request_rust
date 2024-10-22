@@ -148,7 +148,6 @@ pub async fn create_user_record() -> String {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
                         for row in rows {
-                    // Access the second record in the array and retrieve the Amount
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
                             } else {
@@ -223,7 +222,6 @@ fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
 #[ic_cdk::update]
 pub async fn balance_of(principal_to_check: Principal) -> (String, Nat) {
     let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
-    // let mut user_balance: Nat = candid::Nat::from(0u32);
     let transfer_account = Account {
         owner: principal_to_check,
         subaccount: None,
@@ -291,19 +289,5 @@ pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -
         }
     }
 }
-
-// #[ic_cdk::update]
-// pub async fn mint_tokens(recipient: Principal, amount: u64, working_transfer_fee: Tokens) -> (String, Nat) {
-
-//     // Call transfer method on icrc1_ledger canister
-//     let balance = transfer(to, amount, working_transfer_fee).await;
-    
-
-//     // Call balance_of method on icrc1_ledger canister
-//     let balance = balance_of(to).await;
-//     println!("Balance of {:#?}: {:#?}", to, balance);
-
-//     return balance
-// }
 
 // old MINTER export MINTER=bkyz2-fmaaa-aaaaa-qaaaq-cai
