@@ -35,7 +35,7 @@ service : {
     "set_up_transfer_id": () -> (principal);
     "transfer": (TransferArg) -> (opt Tokens);
     "balance_of": (principal) -> ();
-    "mint_tokens": (principal, nat64) -> (opt text);
+    "mint_tokens": (principal, nat64, nat) -> (nat);
     "create_user_record": () -> (text, UserRecord);
     "display_working_proton": (UserRecord) -> (UserRecord, text);
     "display_working_principal": (UserRecord) -> (UserRecord, text);
