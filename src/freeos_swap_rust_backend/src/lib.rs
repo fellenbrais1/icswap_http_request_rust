@@ -4,6 +4,8 @@ use ic_cdk::api::call::{self};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::vec;
+use tokio::time::{sleep_until, Instant, Duration};
+use ic_cdk_macros::init;
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
@@ -17,6 +19,8 @@ pub type Subaccount = [u8; 32];
 pub type Tokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
+
+#[allow(dead_code)]
 const MINTER_ID: &str = "bd3sg-teaaa-aaaaa-qaaba-cai";
 
 #[derive(Clone, Deserialize, CandidType, Debug)]
@@ -71,6 +75,24 @@ pub enum TransferError {
 }
 
 pub type BlockIndex = Nat;
+
+#[ic_cdk::update]
+pub async fn main() {
+    // let interval_duration = Duration::from_secs(10); // 10 second interval
+
+    sleep_until(Instant::now() + Duration::from_secs(10)).await;
+    tick_function().await;
+
+    // loop {
+    //     tick_function().await;
+    //     sleep(interval_duration).await;
+    // }
+}
+
+#[ic_cdk::update]
+pub async fn tick_function() {
+    ic_cdk::api::print("Test function is called.");
+  }
 
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {
@@ -147,6 +169,11 @@ pub async fn create_user_record() -> String {
                 Ok(parsed) => {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
+                        let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
+                        let amount_number_raw: u32 = 0;
+                        let amount_number = Nat::from(amount_number_raw);
+                        let transfer_fee_raw: u32 = 0;
+                        let transfer_fee =  Nat::from(transfer_fee_raw);
                         for row in rows {
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
@@ -155,6 +182,8 @@ pub async fn create_user_record() -> String {
                             }
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
+                                let foo_bar = ic_principal.to_string();
+                                transfer_principal = Principal::from_text(foo_bar).expect("Failed");
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
@@ -162,9 +191,9 @@ pub async fn create_user_record() -> String {
                                 let index = amount.find(" ");
 
                                 if let Some(index) = index {
-                                    let number_str = &amount[..index];
-                                    let number: f32 = number_str.parse().unwrap();
-                                    ic_cdk::api::print(format!("Amount from record {}: {}", counter, number));
+                                    let amount_str = &amount[..index];
+                                    let amount_number: f32 = amount_str.parse().unwrap();
+                                    ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number));
                                 } else {
                                     ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
                                 }
@@ -176,6 +205,8 @@ pub async fn create_user_record() -> String {
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the row"));
                             }
+                            let mint_result = mint_amount(transfer_principal, amount_number.clone(), transfer_fee.clone()).await;
+                            println!("{:?}", mint_result);
                             counter += 1;
                         }
                     } else {
@@ -206,6 +237,18 @@ pub async fn create_user_record() -> String {
             return message
         }
     }
+}
+
+#[ic_cdk::update]
+async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, Nat) {
+    let usable_amount: Nat = amount.clone();
+    let usable_transfer_fee: Nat = transfer_fee.clone();
+
+    transfer(recipient, usable_amount, usable_transfer_fee).await;
+    let balance_result = balance_of(recipient).await;
+    let new_balance = balance_result.1;
+    let print_string = format!("Balance of {} is now: {}", recipient, new_balance);
+    return (print_string, new_balance)
 }
 
 #[ic_cdk::query]

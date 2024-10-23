@@ -1,5 +1,8 @@
 service : {
+    "main": () -> ();
+    "tick_function": () -> ();
     "create_user_record": () -> (text);
     "balance_of": (principal) -> (text, nat);
     "transfer": (principal, nat, nat) -> (text, nat);
+    "mint_amount": (principal, nat, nat) -> (text, nat);
 }
