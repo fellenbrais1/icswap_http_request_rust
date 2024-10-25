@@ -1,6 +1,5 @@
 service : {
-    "main": () -> ();
-    "tick_function": () -> ();
+    "ring": () -> ();
     "create_user_record": () -> (text);
     "balance_of": (principal) -> (text, nat);
     "transfer": (principal, nat, nat) -> (text, nat);

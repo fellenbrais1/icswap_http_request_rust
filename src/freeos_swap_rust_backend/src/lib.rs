@@ -4,8 +4,7 @@ use ic_cdk::api::call::{self};
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::vec;
-use tokio::time::{sleep_until, Instant, Duration};
-use ic_cdk_macros::init;
+use std::time::Duration; 
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
@@ -19,6 +18,7 @@ pub type Subaccount = [u8; 32];
 pub type Tokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
+const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
 
 #[allow(dead_code)]
 const MINTER_ID: &str = "bd3sg-teaaa-aaaaa-qaaba-cai";
@@ -77,22 +77,19 @@ pub enum TransferError {
 pub type BlockIndex = Nat;
 
 #[ic_cdk::update]
-pub async fn main() {
-    // let interval_duration = Duration::from_secs(10); // 10 second interval
+pub fn ring() {  
+    ic_cdk::api::print("Rust Timer Ring!");
+}  
 
-    sleep_until(Instant::now() + Duration::from_secs(10)).await;
-    tick_function().await;
-
-    // loop {
-    //     tick_function().await;
-    //     sleep(interval_duration).await;
-    // }
+#[ic_cdk::post_upgrade]  
+fn post_upgrade() {  
+    init();  
 }
 
-#[ic_cdk::update]
-pub async fn tick_function() {
-    ic_cdk::api::print("Test function is called.");
-  }
+#[ic_cdk::init]  
+fn init() {  
+    let _timer_id = ic_cdk_timers::set_timer_interval(INTERVAL, ring);  
+}  
 
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {
@@ -116,64 +113,48 @@ pub async fn create_user_record() -> String {
         },
     ];
 
-    // Prepare the request_body
     let json_utf8: Vec<u8> = request_body.into_bytes();
     let request_body_vec: Option<Vec<u8>> = Some(json_utf8);
 
     let request = CanisterHttpRequestArgument {
         url: request_url.clone(),
         method: HttpMethod::POST,
-        body: request_body_vec,   // Optional for request
-        max_response_bytes: None, // Optional for request
+        body: request_body_vec,
+        max_response_bytes: None,
         transform: Some(TransformContext {
-            // The "method" parameter needs to have the same name as the function name of your transform function
+
             function: TransformFunc(candid::Func {
                 principal: ic_cdk::api::id(),
                 method: "clean_dynamic_content".to_string(),
             }),
-            // The "TransformContext" function does need a context parameter, it can be empty
+
             context: vec![],
         }),
-        // transform: None,
+
         headers: request_headers,
     };
 
     //Note: in Rust, `http_request()` already sends the cycles needed, so there is no need for explicit Cycles.add() as in Motoko
     match http_request(request, 21_850_258_000).await {
-        //4. DECODE AND RETURN THE RESPONSE
 
         //See:https://docs.rs/ic-cdk/latest/ic_cdk/api/management_canister/http_request/struct.HttpResponse.html
         Ok((response,)) => {
-            // get the raw response body for debugging purposes
             // ic_cdk::api::print(format!("Raw response body: {:?}", response.body));
 
-            //if successful, `HttpResponse` has this structure:
-            // pub struct HttpResponse {
-            //     pub status: Nat,
-            //     pub headers: Vec<HttpHeader>,
-            //     pub body: Vec<u8>,
-            // }
-
-            //You need to decode that Vec<u8> that is the body into readable text.
-            //To do this:
-            //  1. Call `String::from_utf8()` on response.body
-            //  3. Use a switch to explicitly call out both cases of decoding the Blob into ?Text
             let string_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
             ic_cdk::api::print(format!("{:?}", string_body));
 
             // SERDE
-            // Parse the JSON string
             let str_body: &str = string_body.as_str();
             match serde_json::from_str::<Value>(str_body) {
                 Ok(parsed) => {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
                         let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
-                        let amount_number_raw: u32 = 0;
+                        let mut amount_number_raw: u32 = 0;
                         let amount_number = Nat::from(amount_number_raw);
                         let transfer_fee_raw: u32 = 0;
-                        let transfer_fee =  Nat::from(transfer_fee_raw);
                         for row in rows {
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
@@ -182,8 +163,8 @@ pub async fn create_user_record() -> String {
                             }
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
-                                let foo_bar = ic_principal.to_string();
-                                transfer_principal = Principal::from_text(foo_bar).expect("Failed");
+                                // let usable_transfer_principal = ic_principal.to_string();
+                                transfer_principal = Principal::from_text("ucnkc-ymhwo-lkuab-cnawm-fnfpz-xh277-hqy6i-jjvcf-brt37-bch2n-4qe").expect("Failed");
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
@@ -191,8 +172,9 @@ pub async fn create_user_record() -> String {
                                 let index = amount.find(" ");
 
                                 if let Some(index) = index {
-                                    let amount_str = &amount[..index];
-                                    let amount_number: f32 = amount_str.parse().unwrap();
+                                    // let amount_str = &amount[..index];
+                                    // let amount_number: f32 = amount_str.parse().unwrap();
+                                    amount_number_raw = 1;
                                     ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number));
                                 } else {
                                     ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
@@ -205,8 +187,11 @@ pub async fn create_user_record() -> String {
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the row"));
                             }
+                            // Calling the minting process for this record
+                            let amount_number = Nat::from(amount_number_raw);
+                            let transfer_fee = Nat::from(transfer_fee_raw);
                             let mint_result = mint_amount(transfer_principal, amount_number.clone(), transfer_fee.clone()).await;
-                            println!("{:?}", mint_result);
+                            ic_cdk::api::print(format!("Mint result is: {:?}", mint_result));
                             counter += 1;
                         }
                     } else {
@@ -218,11 +203,7 @@ pub async fn create_user_record() -> String {
                 }
             }
             // END SERDE
-        
-            //The API response will looks like this:
-            // { successful: true }
-
-            //Return the body as a string and end the method
+    
             let result: String = format!(
                 "{}", str_body
             );
@@ -233,7 +214,6 @@ pub async fn create_user_record() -> String {
             let message =
                 format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
 
-            //Return the error as a string and end the method
             return message
         }
     }
@@ -251,14 +231,20 @@ async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) ->
     return (print_string, new_balance)
 }
 
+// #[ic_cdk::update]
+// async fn after_mint_balance(recipuent: Principal) -> (String, Nat) {
+//     let balance_result = balance_of(recipient).await;
+//     let new_balance = balance_result.1;
+//     let print_string = format!("Balance of {} is now: {}", recipient, new_balance);
+//     return (print_string, new_balance)
+// }
+
 #[ic_cdk::query]
 fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
     let mut response = args.response;
 
-    // Filter out the 'Date' header from the headers
     response.headers.clear();
     
-    // Return the cleaned response
     response
 }
 
@@ -332,5 +318,3 @@ pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -
         }
     }
 }
-
-// old MINTER export MINTER=bkyz2-fmaaa-aaaaa-qaaaq-cai
