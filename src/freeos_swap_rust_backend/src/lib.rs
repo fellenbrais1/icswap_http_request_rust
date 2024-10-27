@@ -107,20 +107,23 @@ async fn init() {
 }
 
 #[ic_cdk::update]
-fn undecimilaze_freeos_amount(amount: f64) -> Nat {
+fn undecimilaze_freeos_amount(amount: f64) -> u64 {
+    ic_cdk::api::print("This code is running");
     let amount_to_convert: u64 = (amount * 10_000.0) as u64;
-    let new_amount: Nat = Nat::from(amount_to_convert);
+    let new_amount = amount_to_convert;
     return new_amount
 }
 
 #[ic_cdk::update]
 fn decimilaze_freeos_amount(amount: u64) -> f64 {
+    ic_cdk::api::print("This code is running");
     let new_amount: f64 = amount as f64 / 10_000.0;
     return new_amount
 }
 
 #[ic_cdk::update]
-pub fn whole_amount_from_decimal(amount: f64) -> Nat {
+pub fn whole_amount_from_decimal(amount: f64) -> u64 {
+    ic_cdk::api::print("This code is running - Whole amount from decimal");
     let print_amount = undecimilaze_freeos_amount(amount);
     ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
     return print_amount
@@ -128,6 +131,7 @@ pub fn whole_amount_from_decimal(amount: f64) -> Nat {
 
 #[ic_cdk::update]
 pub fn decimal_amount_from_whole(amount: u64) -> f64 {
+    ic_cdk::api::print("This code is running - Decimal amount from whole number");
     let print_amount = decimilaze_freeos_amount(amount);
     ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
     return print_amount
