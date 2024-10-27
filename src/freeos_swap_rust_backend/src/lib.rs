@@ -104,7 +104,34 @@ pub async fn ring() -> () {
 #[ic_cdk::init]  
 async fn init() {  
     ic_cdk::api::print("Initializing Canister");
-}  
+}
+
+#[ic_cdk::update]
+fn undecimilaze_freeos_amount(amount: f64) -> Nat {
+    let amount_to_convert: u64 = (amount * 10_000.0) as u64;
+    let new_amount: Nat = Nat::from(amount_to_convert);
+    return new_amount
+}
+
+#[ic_cdk::update]
+fn decimilaze_freeos_amount(amount: u64) -> f64 {
+    let new_amount: f64 = amount as f64 / 10_000.0;
+    return new_amount
+}
+
+#[ic_cdk::update]
+pub fn whole_amount_from_decimal(amount: f64) -> Nat {
+    let print_amount = undecimilaze_freeos_amount(amount);
+    ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
+    return print_amount
+}
+
+#[ic_cdk::update]
+pub fn decimal_amount_from_whole(amount: u64) -> f64 {
+    let print_amount = decimilaze_freeos_amount(amount);
+    ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
+    return print_amount
+}
 
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {

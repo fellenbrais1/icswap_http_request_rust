@@ -4,4 +4,6 @@ service : {
     "balance_of": (principal) -> (text, nat);
     "transfer": (principal, nat, nat) -> (text, nat);
     "mint_amount": (principal, nat, nat) -> (text, nat);
+    "whole_amount_from_decimal": (float64) -> (nat);
+    "decimal_amount_from_whole": (nat) -> (float64);
 }
