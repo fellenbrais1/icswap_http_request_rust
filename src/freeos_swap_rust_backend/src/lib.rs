@@ -1,6 +1,7 @@
 use candid::{CandidType, Nat, Principal};
 use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
 use ic_cdk::api::call::{self};
+use ic_cdk::spawn;
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::vec;
@@ -18,7 +19,12 @@ pub type Subaccount = [u8; 32];
 pub type Tokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
-const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
+// const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
+const INTERVAL: Duration = Duration::from_secs(60); // Test amount 
+
+// Converting FREEOS decimal point values to Nats we can use -- in progress
+// 1 unit of FREEOS = 0.0001
+// Therefore, multiply all user inputs by 10,000 to get a usable number for this program
 
 #[allow(dead_code)]
 const MINTER_ID: &str = "bd3sg-teaaa-aaaaa-qaaba-cai";
@@ -76,19 +82,28 @@ pub enum TransferError {
 
 pub type BlockIndex = Nat;
 
-#[ic_cdk::update]
-pub fn ring() {  
-    ic_cdk::api::print("Rust Timer Ring!");
-}  
-
 #[ic_cdk::post_upgrade]  
 fn post_upgrade() {  
-    init();  
+    let _timer_id = ic_cdk_timers::set_timer_interval(INTERVAL, timer_callback);
+}
+
+fn timer_callback() {
+    // Spawn the async work without blocking
+    spawn(async {
+        ring().await;
+    });
+}
+
+#[ic_cdk::update]
+pub async fn ring() -> () {  
+    ic_cdk::api::print("Rust Timer Ring!");
+    let result = create_user_record().await;
+    ic_cdk::api::print(format!("{:?}", result));
 }
 
 #[ic_cdk::init]  
-fn init() {  
-    let _timer_id = ic_cdk_timers::set_timer_interval(INTERVAL, ring);  
+async fn init() {  
+    ic_cdk::api::print("Initializing Canister");
 }  
 
 #[ic_cdk::update]
@@ -153,7 +168,7 @@ pub async fn create_user_record() -> String {
                         let mut counter = 0;
                         let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
                         let mut amount_number_raw: u32 = 0;
-                        let amount_number = Nat::from(amount_number_raw);
+                        // let amount_number = Nat::from(amount_number_raw);
                         let transfer_fee_raw: u32 = 0;
                         for row in rows {
                             if let Some(proton_account) = row["proton_account"].as_str() {
@@ -164,7 +179,13 @@ pub async fn create_user_record() -> String {
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
                                 // let usable_transfer_principal = ic_principal.to_string();
-                                transfer_principal = Principal::from_text("ucnkc-ymhwo-lkuab-cnawm-fnfpz-xh277-hqy6i-jjvcf-brt37-bch2n-4qe").expect("Failed");
+                                // The next lines simulate iterating through different valid principals
+                                if counter == 0 {
+                                    transfer_principal = Principal::from_text("ucnkc-ymhwo-lkuab-cnawm-fnfpz-xh277-hqy6i-jjvcf-brt37-bch2n-4qe").expect("Failed");
+                                }
+                                if counter == 1 {
+                                    transfer_principal = Principal::from_text("q24jw-w6pu2-ronwf-fybif-jwlbb-vybn3-ylxgc-firyw-aex75-hitd3-oae").expect("Failed");
+                                }
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
@@ -174,8 +195,17 @@ pub async fn create_user_record() -> String {
                                 if let Some(index) = index {
                                     // let amount_str = &amount[..index];
                                     // let amount_number: f32 = amount_str.parse().unwrap();
-                                    amount_number_raw = 1;
-                                    ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number));
+                                    // amount_number_raw = 1;
+                                    // ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    // The next lines simulate iterating through different valid amounts in the JSON
+                                    if counter == 0 {
+                                        amount_number_raw = 10000;
+                                        ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    }
+                                    if counter == 1 {
+                                        amount_number_raw = 5000;
+                                        ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    }
                                 } else {
                                     ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
                                 }
@@ -232,7 +262,7 @@ async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) ->
 }
 
 // #[ic_cdk::update]
-// async fn after_mint_balance(recipuent: Principal) -> (String, Nat) {
+// async fn after_mint_balance(recipient: Principal) -> (String, Nat) {
 //     let balance_result = balance_of(recipient).await;
 //     let new_balance = balance_result.1;
 //     let print_string = format!("Balance of {} is now: {}", recipient, new_balance);
