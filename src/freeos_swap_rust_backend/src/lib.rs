@@ -4,7 +4,6 @@ use ic_cdk::api::call::{self};
 use ic_cdk::spawn;
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
-use std::str::FromStr;
 use std::vec;
 use std::time::Duration; 
 
@@ -17,7 +16,7 @@ pub struct UserRecord {
 }
 
 pub type Subaccount = [u8; 32];
-pub type Tokens = Nat;
+pub type Tokens = u64;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
 // const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
@@ -201,7 +200,7 @@ pub async fn create_user_record() -> String {
                         let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
                         let mut amount_number_raw: u64 = 0;
                         // let amount_number = Nat::from(amount_number_raw);
-                        let transfer_fee_raw: u32 = 0;
+                        let transfer_fee_raw: u64 = 0;
                         for row in rows {
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
@@ -264,8 +263,8 @@ pub async fn create_user_record() -> String {
                                 ic_cdk::api::print(format!("Failed to retrieve 'utc_time' from the row"));
                             }
                             // Calling the minting process for this record
-                            let amount_number = Nat::from(amount_number_raw);
-                            let transfer_fee = Nat::from(transfer_fee_raw);
+                            let amount_number = amount_number_raw;
+                            let transfer_fee: u64 = transfer_fee_raw;
                             let mint_result = mint_amount(transfer_principal, amount_number.clone(), transfer_fee.clone()).await;
                             ic_cdk::api::print(format!("Mint result is: {:?}", mint_result));
                             counter += 1;
@@ -296,9 +295,9 @@ pub async fn create_user_record() -> String {
 }
 
 #[ic_cdk::update]
-async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, f64) {
-    let usable_amount: Nat = amount.clone();
-    let usable_transfer_fee: Nat = transfer_fee.clone();
+async fn mint_amount(recipient: Principal, amount: u64, transfer_fee: Tokens) -> (String, f64) {
+    let usable_amount = amount.clone();
+    let usable_transfer_fee: u64 = transfer_fee.clone();
 
     transfer(recipient, usable_amount, usable_transfer_fee).await;
     let balance_result = balance_of(recipient).await;
@@ -331,14 +330,14 @@ pub async fn balance_of(principal_to_check: Principal) -> (String, f64) {
         owner: principal_to_check,
         subaccount: None,
     };
-    let result: Result<(u64,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account,)).await;
+    let result: Result<(u128,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account,)).await;
 
     match result {
         Ok((balance, )) => {
-            let print_string = format!("Balance of {}: {}", &transfer_account.owner, balance.to_string());
-            ic_cdk::api::print(format!("{}", print_string));
-            let user_balance: u64 = balance;
+            let user_balance: u64 = balance as u64;
             let new_balance = decimal_amount_from_whole(user_balance);
+            let print_string = format!("Balance of {}: {:.4}", &transfer_account.owner, balance);
+            ic_cdk::api::print(format!("{}", print_string));
             return (print_string, new_balance)
         }
         Err(err) => {
@@ -352,7 +351,7 @@ pub async fn balance_of(principal_to_check: Principal) -> (String, f64) {
 }
 
 #[ic_cdk::update]
-pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, f64) {
+pub async fn transfer(recipient: Principal, amount: u64, transfer_fee: Tokens) -> (String, f64) {
     let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
     let transfer_account = Account {
         owner: recipient,
@@ -364,7 +363,7 @@ pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -
         fee: Some(transfer_fee),
         created_at_time: None,
         memo: None,
-        amount: Tokens::from(amount),
+        amount: amount,
     };
     let call_result: Result<(Result<BlockIndex, TransferError>,), _> = call::call(ledger_id, "icrc1_transfer", (transfer_info, )).await;
     
