@@ -1,9 +1,9 @@
 service : {
     "ring": () -> ();
     "create_user_record": () -> (text);
-    "balance_of": (principal) -> (text, nat);
-    "transfer": (principal, nat, nat) -> (text, nat);
-    "mint_amount": (principal, nat, nat) -> (text, nat);
+    "balance_of": (principal) -> (text, float64);
+    "transfer": (principal, nat, nat) -> (text, float64);
+    "mint_amount": (principal, nat, nat) -> (text, float64);
     "whole_amount_from_decimal": (float64) -> (nat64);
     "decimal_amount_from_whole": (nat64) -> (float64);
 }

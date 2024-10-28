@@ -4,6 +4,7 @@ use ic_cdk::api::call::{self};
 use ic_cdk::spawn;
 use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
+use std::str::FromStr;
 use std::vec;
 use std::time::Duration; 
 
@@ -140,7 +141,7 @@ pub fn decimal_amount_from_whole(amount: u64) -> f64 {
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {
     let request_url : String = String::from("https://api-xprnetwork-test.saltant.io/v1/chain/get_table_rows");
-    let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1726732990,"upper_bound":1726735767,"table":"swaps","scope":"freeosgov2","limit":100}"#);
+    let request_body : String = String::from(r#"{"json":true,"code":"freeosgov2","lower_bound":1730065553,"upper_bound":1730065936,"table":"swaps","scope":"freeosgov2","limit":100}"#);
 
     let host = request_url.split('/').nth(2).unwrap_or_default().to_string();
     
@@ -198,7 +199,7 @@ pub async fn create_user_record() -> String {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
                         let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
-                        let mut amount_number_raw: u32 = 0;
+                        let mut amount_number_raw: u64 = 0;
                         // let amount_number = Nat::from(amount_number_raw);
                         let transfer_fee_raw: u32 = 0;
                         for row in rows {
@@ -210,13 +211,14 @@ pub async fn create_user_record() -> String {
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
                                 // let usable_transfer_principal = ic_principal.to_string();
+                                transfer_principal = Principal::from_text(ic_principal).expect("Failed to read line");
                                 // The next lines simulate iterating through different valid principals
-                                if counter == 0 {
-                                    transfer_principal = Principal::from_text("ucnkc-ymhwo-lkuab-cnawm-fnfpz-xh277-hqy6i-jjvcf-brt37-bch2n-4qe").expect("Failed");
-                                }
-                                if counter == 1 {
-                                    transfer_principal = Principal::from_text("q24jw-w6pu2-ronwf-fybif-jwlbb-vybn3-ylxgc-firyw-aex75-hitd3-oae").expect("Failed");
-                                }
+                                // if counter == 0 {
+                                //     transfer_principal = Principal::from_text("ucnkc-ymhwo-lkuab-cnawm-fnfpz-xh277-hqy6i-jjvcf-brt37-bch2n-4qe").expect("Failed");
+                                // }
+                                // if counter == 1 {
+                                //     transfer_principal = Principal::from_text("q24jw-w6pu2-ronwf-fybif-jwlbb-vybn3-ylxgc-firyw-aex75-hitd3-oae").expect("Failed");
+                                // }
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
@@ -224,19 +226,32 @@ pub async fn create_user_record() -> String {
                                 let index = amount.find(" ");
 
                                 if let Some(index) = index {
-                                    // let amount_str = &amount[..index];
-                                    // let amount_number: f32 = amount_str.parse().unwrap();
-                                    // amount_number_raw = 1;
-                                    // ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    let amount_str = &amount[..index];
+                                    ic_cdk::api::print(format!("{}", amount_str));
+
+                                    match amount_str.parse::<f64>() {
+                                        Ok(amount_number) => {
+                                            // Successful parsing, use amount_number
+                                            ic_cdk::api::print(format!("Parsed amount: {}", amount_number));
+                                            let amount_number = undecimilaze_freeos_amount(amount_number);
+                                            amount_number_raw = amount_number;
+                                            ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number));
+                                        }
+                                        Err(e) => {
+                                            // Handle parsing error, e.g., log an error or return an error value
+                                            ic_cdk::api::print(format!("Parsing error: {}", e));
+                                        }
+                                    }
+                                    // let amount_number: u64 = amount_str.parse().unwrap();
                                     // The next lines simulate iterating through different valid amounts in the JSON
-                                    if counter == 0 {
-                                        amount_number_raw = 10000;
-                                        ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
-                                    }
-                                    if counter == 1 {
-                                        amount_number_raw = 5000;
-                                        ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
-                                    }
+                                    // if counter == 0 {
+                                    //     amount_number_raw = 10000;
+                                    //     ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    // }
+                                    // if counter == 1 {
+                                    //     amount_number_raw = 5000;
+                                    //     ic_cdk::api::print(format!("Amount from record {}: {}", counter, amount_number_raw));
+                                    // }
                                 } else {
                                     ic_cdk::api::print(format!("Failed to retrieve 'amount' from the row"));
                                 }
@@ -281,13 +296,13 @@ pub async fn create_user_record() -> String {
 }
 
 #[ic_cdk::update]
-async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, Nat) {
+async fn mint_amount(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, f64) {
     let usable_amount: Nat = amount.clone();
     let usable_transfer_fee: Nat = transfer_fee.clone();
 
     transfer(recipient, usable_amount, usable_transfer_fee).await;
     let balance_result = balance_of(recipient).await;
-    let new_balance = balance_result.1;
+    let new_balance: f64 = balance_result.1;
     let print_string = format!("Balance of {} is now: {}", recipient, new_balance);
     return (print_string, new_balance)
 }
@@ -310,32 +325,34 @@ fn clean_dynamic_content(args: TransformArgs) -> HttpResponse {
 }
 
 #[ic_cdk::update]
-pub async fn balance_of(principal_to_check: Principal) -> (String, Nat) {
+pub async fn balance_of(principal_to_check: Principal) -> (String, f64) {
     let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
     let transfer_account = Account {
         owner: principal_to_check,
         subaccount: None,
     };
-    let result: Result<(Nat,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account,)).await;
+    let result: Result<(u64,),  _> = call::call(ledger_id, "icrc1_balance_of", (transfer_account,)).await;
 
     match result {
         Ok((balance, )) => {
             let print_string = format!("Balance of {}: {}", &transfer_account.owner, balance.to_string());
             ic_cdk::api::print(format!("{}", print_string));
-            let user_balance = balance;
-            return (print_string, user_balance)
+            let user_balance: u64 = balance;
+            let new_balance = decimal_amount_from_whole(user_balance);
+            return (print_string, new_balance)
         }
         Err(err) => {
             let print_string = format!("Balance query failed: {:?}", err);
             eprintln!("{}", print_string);
-            let user_balance: Nat = candid::Nat::from(0u32);
-            return (print_string, user_balance)
+            let user_balance: u64 = u64::from(0u64);
+            let new_balance = decimal_amount_from_whole(user_balance);
+            return (print_string, new_balance)
         }
     }
 }
 
 #[ic_cdk::update]
-pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, Nat) {
+pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -> (String, f64) {
     let ledger_id = Principal::from_text(ICRC1_LEDGER_CANISTER_ID).unwrap();
     let transfer_account = Account {
         owner: recipient,
@@ -357,7 +374,7 @@ pub async fn transfer(recipient: Principal, amount: Nat, transfer_fee: Tokens) -
                 Ok(block_index) => {
                     let balance = balance_of(recipient).await;
                     let balance_to_print = balance.1;
-                    let print_string = format!("Transfer successful for {} with block index: {}, New balance is now: {}", &transfer_account.owner, block_index.to_string(), balance_to_print);
+                    let print_string = format!("Transfer successful for {} with block index: {}, New balance is now: {:?}", &transfer_account.owner, block_index.to_string(), balance_to_print);
                     ic_cdk::api::print(&print_string);
                     return (print_string, balance_to_print)
                 }
