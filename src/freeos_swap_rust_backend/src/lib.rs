@@ -1,3 +1,4 @@
+use candid::types::principal::PrincipalError;
 use candid::{CandidType, Nat, Principal};
 use ic_cdk::api::management_canister::http_request::{http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,TransformContext, TransformFunc};
 use ic_cdk::api::call::{self};
@@ -19,8 +20,8 @@ pub type Subaccount = [u8; 32];
 pub type Tokens = Nat;
 
 const ICRC1_LEDGER_CANISTER_ID: &str = "mxzaz-hqaaa-aaaar-qaada-cai";
-// const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
-const INTERVAL: Duration = Duration::from_secs(60); // Test amount 
+const INTERVAL: Duration = Duration::from_secs(60 * 60 * 24); // Seconds in one day 
+// const INTERVAL: Duration = Duration::from_secs(60); // Test amount 
 
 // Converting FREEOS decimal point values to Nats we can use -- in progress
 // 1 unit of FREEOS = 0.0001
@@ -55,6 +56,12 @@ pub struct TransferResult {
     pub err: TransferError,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug, PartialEq)]
+pub struct ProtonResult {
+    pub ok: Option<String>,
+    pub err: Option<String>,
+}
+
 #[derive(Clone, Serialize, Deserialize, CandidType, Debug)]
 pub enum TransferError {
     BadFee {
@@ -83,32 +90,33 @@ pub enum TransferError {
 pub type BlockIndex = Nat;
 
 #[ic_cdk::post_upgrade]  
-fn post_upgrade() {  
+async fn post_upgrade() {  
     let _timer_id = ic_cdk_timers::set_timer_interval(INTERVAL, timer_callback);
+    init().await;
 }
 
 fn timer_callback() {
     // Spawn the async work without blocking
     spawn(async {
-        ring().await;
+        auto_call().await;
     });
 }
 
 #[ic_cdk::update]
-pub async fn ring() -> () {  
-    ic_cdk::api::print("Rust Timer Ring!");
+pub async fn auto_call() -> () {  
+    ic_cdk::api::print("auto_call() - Automatic function call running");
     let result = create_user_record().await;
     ic_cdk::api::print(format!("{:?}", result));
 }
 
 #[ic_cdk::init]  
 async fn init() {  
+    // Doesn't seem to do anything yet, but duration of autocall could potentially be set here instead of in post_upgrade()
     ic_cdk::api::print("Initializing Canister");
 }
 
 #[ic_cdk::update]
 fn undecimilaze_freeos_amount(amount: f64) -> u64 {
-    ic_cdk::api::print("This code is running");
     let amount_to_convert: u64 = (amount * 10_000.0) as u64;
     let new_amount = amount_to_convert;
     return new_amount
@@ -116,14 +124,13 @@ fn undecimilaze_freeos_amount(amount: f64) -> u64 {
 
 #[ic_cdk::update]
 fn decimilaze_freeos_amount(amount: u64) -> f64 {
-    ic_cdk::api::print("This code is running");
     let new_amount: f64 = amount as f64 / 10_000.0;
     return new_amount
 }
 
 #[ic_cdk::update]
 pub fn whole_amount_from_decimal(amount: f64) -> u64 {
-    ic_cdk::api::print("This code is running - Whole amount from decimal");
+    ic_cdk::api::print("whole_amount_from_decimal() - Conversion to whole number amount from decimal");
     let print_amount = undecimilaze_freeos_amount(amount);
     ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
     return print_amount
@@ -131,10 +138,59 @@ pub fn whole_amount_from_decimal(amount: f64) -> u64 {
 
 #[ic_cdk::update]
 pub fn decimal_amount_from_whole(amount: u64) -> f64 {
-    ic_cdk::api::print("This code is running - Decimal amount from whole number");
+    ic_cdk::api::print("decimal_amount_from_whole() - Conversion to decimal amount from whole number");
     let print_amount = decimilaze_freeos_amount(amount);
     ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
     return print_amount
+}
+
+fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
+    match Principal::from_text(principal_to_check) {
+        Ok(principal) => Ok(principal),
+        Err(error) => {
+            ic_cdk::println!("Error processing item: {}", error);
+            Err(error)
+        }
+    }
+}
+
+pub fn proton_account_to_check(account_to_check: &str) -> ProtonResult {
+    // Implement your Proton account validation logic here.
+    // For example, you could use a regular expression to check the format.
+    let is_valid_proton_account = is_valid_proton_account(account_to_check);
+
+    if is_valid_proton_account {
+        ProtonResult { ok: Some(account_to_check.to_string()), err: None }
+    } else {
+        ProtonResult { ok: None, err: Some("Invalid Proton account".to_string()) }
+    }
+}
+
+fn is_valid_proton_account(account: &str) -> bool {
+    // Implement your validation logic here.
+    // For example, you could use a regular expression to check the format.
+    // ...
+    true // Replace with actual validation logic
+}
+
+fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
+    match Principal::from_text(principal_to_check) {
+        Ok(principal) => Ok(principal),
+        Err(error) => {
+            ic_cdk::println!("Error processing item: {}", error);
+            Err(error)
+        }
+    }
+}
+
+fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
+    match Principal::from_text(principal_to_check) {
+        Ok(principal) => Ok(principal),
+        Err(error) => {
+            ic_cdk::println!("Error processing item: {}", error);
+            Err(error)
+        }
+    }
 }
 
 #[ic_cdk::update]
@@ -185,7 +241,6 @@ pub async fn create_user_record() -> String {
 
         //See:https://docs.rs/ic-cdk/latest/ic_cdk/api/management_canister/http_request/struct.HttpResponse.html
         Ok((response,)) => {
-            // ic_cdk::api::print(format!("Raw response body: {:?}", response.body));
 
             let string_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -197,7 +252,19 @@ pub async fn create_user_record() -> String {
                 Ok(parsed) => {
                     if let Some(rows) = parsed["rows"].as_array() {
                         let mut counter = 0;
-                        let mut transfer_principal: Principal = Principal::from_text("aaaaa-aa").expect("Failed to read line");
+
+                        let mut usable_principal: Option<Principal> = None;
+                        let mut principal_error: String = "".to_string();
+                        match check_principal("aaaaa-aa") {
+                            Ok(principal) => {
+                                usable_principal = Some(principal);
+                            }
+                            Err(error) => {
+                                principal_error = error.to_string();
+                                ic_cdk::println!("Errro parsing principal: {}", error);
+                            }
+                        }
+
                         let mut amount_number_raw: u64 = 0;
                         // let amount_number = Nat::from(amount_number_raw);
                         for row in rows {
@@ -208,7 +275,15 @@ pub async fn create_user_record() -> String {
                             }
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
                                 ic_cdk::api::print(format!("IC Principal from record {}: {}", counter, ic_principal));
-                                transfer_principal = Principal::from_text(ic_principal).expect("Failed to read line");
+                            
+                                match check_principal(ic_principal) {
+                                    Ok(principal) => {
+                                        usable_principal = Some(principal);
+                                    }
+                                    Err(error) => {
+                                        ic_cdk::println!("Error parsing principal: {}", error);
+                                    }
+                                }
                             } else {
                                 ic_cdk::api::print(format!("Failed to retrieve 'ic_principal' from the row"));
                             }
@@ -252,8 +327,15 @@ pub async fn create_user_record() -> String {
                             ic_cdk::api::print(format!("AMOUNT NUMBER IS: {}", amount_number));
 
                             // INTER CANISTER CALL
-                            let mint_result = mint_amount(transfer_principal, amount_number).await;
-                            ic_cdk::api::print(format!("MINT RESULT is: {:?}, AMOUNT MINTED: {:?}", mint_result, amount_number));
+                            match usable_principal {
+                                Some(principal) => {
+                                    let mint_result = mint_amount(principal, amount_number).await;
+                                    ic_cdk::api::print(format!("MINT RESULT is: {:?}, AMOUNT MINTED: {:?}", mint_result, amount_number));
+                                }
+                                None => {
+                                    ic_cdk::api::print(format!("Mint processing failed due to {}", principal_error));
+                                }
+                            }
                             counter += 1;
                         }
                     } else {
