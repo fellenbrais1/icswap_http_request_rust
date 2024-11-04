@@ -7,6 +7,8 @@ use serde::{Serialize, Deserialize};
 use serde_json::{self, Value};
 use std::vec;
 use std::time::Duration; 
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
@@ -167,31 +169,32 @@ pub fn proton_account_to_check(account_to_check: &str) -> ProtonResult {
 }
 
 fn is_valid_proton_account(account: &str) -> bool {
-    // Implement your validation logic here.
-    // For example, you could use a regular expression to check the format.
-    // ...
-    true // Replace with actual validation logic
-}
-
-fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
-    match Principal::from_text(principal_to_check) {
-        Ok(principal) => Ok(principal),
-        Err(error) => {
-            ic_cdk::println!("Error processing item: {}", error);
-            Err(error)
-        }
+    if account.is_empty() {
+        return false
+    } else {
+        return true
     }
 }
 
-fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
-    match Principal::from_text(principal_to_check) {
-        Ok(principal) => Ok(principal),
-        Err(error) => {
-            ic_cdk::println!("Error processing item: {}", error);
-            Err(error)
-        }
-    }
-}
+// fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
+//     match Principal::from_text(principal_to_check) {
+//         Ok(principal) => Ok(principal),
+//         Err(error) => {
+//             ic_cdk::println!("Error processing item: {}", error);
+//             Err(error)
+//         }
+//     }
+// }
+
+// fn check_principal(principal_to_check: &str) -> Result<Principal, PrincipalError> {
+//     match Principal::from_text(principal_to_check) {
+//         Ok(principal) => Ok(principal),
+//         Err(error) => {
+//             ic_cdk::println!("Error processing item: {}", error);
+//             Err(error)
+//         }
+//     }
+// }
 
 #[ic_cdk::update]
 pub async fn create_user_record() -> String {
@@ -254,14 +257,16 @@ pub async fn create_user_record() -> String {
                         let mut counter = 0;
 
                         let mut usable_principal: Option<Principal> = None;
-                        let mut principal_error: String = "".to_string();
+                        let mut error_map: HashMap<String, String> = HashMap::new();
+                        let mut operation_error: String = "".to_string();
                         match check_principal("aaaaa-aa") {
                             Ok(principal) => {
                                 usable_principal = Some(principal);
                             }
                             Err(error) => {
-                                principal_error = error.to_string();
-                                ic_cdk::println!("Errro parsing principal: {}", error);
+                                operation_error = error.to_string();
+                                error_map.insert("IC_principal".to_string(), operation_error);
+                                ic_cdk::println!("Error parsing principal: {}", error);
                             }
                         }
 
@@ -271,6 +276,7 @@ pub async fn create_user_record() -> String {
                             if let Some(proton_account) = row["proton_account"].as_str() {
                                 ic_cdk::api::print(format!("Proton Account from record {}: {}", counter, proton_account));
                             } else {
+                                operation_error = "Failed to retrieve 'proton_account' from the row".to_string();
                                 ic_cdk::api::print(format!("Failed to retrieve 'proton_account' from the row"));
                             }
                             if let Some(ic_principal) = row["ic_principal"].as_str() {
@@ -322,10 +328,6 @@ pub async fn create_user_record() -> String {
                             // Calling the minting process for this record
                             let amount_number = amount_number_raw;
 
-                            // Debug statements
-                            ic_cdk::api::print(format!("AMOUNT NUMBER RAW IS: {}", amount_number));
-                            ic_cdk::api::print(format!("AMOUNT NUMBER IS: {}", amount_number));
-
                             // INTER CANISTER CALL
                             match usable_principal {
                                 Some(principal) => {
@@ -333,7 +335,7 @@ pub async fn create_user_record() -> String {
                                     ic_cdk::api::print(format!("MINT RESULT is: {:?}, AMOUNT MINTED: {:?}", mint_result, amount_number));
                                 }
                                 None => {
-                                    ic_cdk::api::print(format!("Mint processing failed due to {}", principal_error));
+                                    // ic_cdk::api::print(format!("Mint processing failed due to {}", operation_error));
                                 }
                             }
                             counter += 1;
