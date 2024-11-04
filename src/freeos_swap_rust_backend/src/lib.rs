@@ -8,7 +8,7 @@ use serde_json::{self, Value};
 use std::vec;
 use std::time::Duration; 
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use ic_cdk::api;
 
 #[derive(Serialize, Deserialize, CandidType, Debug)]
 pub struct UserRecord {
@@ -130,11 +130,25 @@ fn decimilaze_freeos_amount(amount: u64) -> f64 {
     return new_amount
 }
 
+fn get_unix_time_seconds() -> u64 {
+    // Get the time in nanoseconds since the UNIX epoch
+    let time_nanos = api::time();
+    
+    // Convert nanoseconds to seconds
+    time_nanos / 1_000_000_000
+    }
+    
+    #[ic_cdk::query]
+    fn current_unix_time() -> u64 {
+    get_unix_time_seconds()
+    }
+
 #[ic_cdk::update]
 pub fn whole_amount_from_decimal(amount: f64) -> u64 {
     ic_cdk::api::print("whole_amount_from_decimal() - Conversion to whole number amount from decimal");
-    let print_amount = undecimilaze_freeos_amount(amount);
+    let mut print_amount = undecimilaze_freeos_amount(amount);
     ic_cdk::api::print(format!("Original amount was: {:?}, new amount is: {:?}", amount, print_amount));
+    print_amount = get_unix_time_seconds();
     return print_amount
 }
 
