@@ -1,6 +1,7 @@
 service : {
     "auto_call" : () -> ();
     "create_user_record" : () -> (text);
+    "current_unix_time" : () -> (nat64);
     "balance_of" : (principal) -> (text, nat64);
     "transfer" : (principal, nat) -> (text, nat);
     "mint_amount" : (principal, nat) -> (text, nat);
