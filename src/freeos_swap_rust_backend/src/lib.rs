@@ -22,8 +22,6 @@
 // As mentioned above, amounts given to the icrc1_ledger canister have to be in Nat format, so all floating point numbers have to be converted to Nats before minting etc. can occur.
 // Please check the README.md, set_env.sh, and deploy_icrc1.sh files to configure things to your liking. You will have to set up a dfx identity called 'archive_controller' to nake it work but this can have any password etc., the name just has to match.
 
-// CONTACT
-// As you will no doubt see from the code, my knowledge of Rust and the Internet Computer has some Grand Canyon-sized gaps in it. However, if you need me to explain anything I have tried to do here or how things are supposed to work, contact me on Discord at michaelmccann88 or email me at fellenbrais@gmail.com and I will try to help wherever I can. All the best and good luck.
 
 // All crates currently used by the program
 use candid::types::principal::PrincipalError;
