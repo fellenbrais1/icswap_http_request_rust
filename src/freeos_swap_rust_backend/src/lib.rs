@@ -13,7 +13,6 @@
 // A variable was meant to be set up to see how many records were successfully processed and where through the table of user records on the frontend the program got up to. Then, the http requests bounds could be changed to only look for new records from beyond this successful point.
 // This also needs to be connected to the frontend, though I imagine that might be more simple, only needing the PROTON principal, the IC principal, the amount and the unix time from the frontend to be fed into this canister to generate the http GET request.
 
-
 // KEYWORD 'TODO'
 // I have marked areas of problems and actions to be taken with the keyword TODO, search the file with this keyword to find all points where action needs to be taken
 
@@ -184,7 +183,7 @@ pub fn whole_amount_from_decimal(amount: f64) -> u64 {
 }
 
 // Multiplies a number by 10_000 to effectively move all 4 decimal places of a FREEOS above 0
-// Called by whole_amount_by_decim()
+// Called by whole_amount_by_decimal()
 #[ic_cdk::update]
 fn undecimilaze_freeos_amount(amount: f64) -> u64 {
     let amount_to_convert: u64 = (amount * 10_000.0) as u64;
@@ -298,8 +297,7 @@ pub async fn create_user_record() -> String {
 
         Ok((response,)) => {
 
-            let string_body = String::from_utf8(response.body)
-                .expect("Transformed response is not UTF-8 encoded.");
+            let string_body = String::from_utf8(response.body).expect("Transformed response is not UTF-8 encoded.");
             ic_cdk::api::print(format!("{:?}", string_body));
 
             // SERDE

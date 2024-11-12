@@ -1,5 +1,21 @@
 # `freeos_swap_rust`
 
+
+### Set-up and deployment instructions
+
+To deploy this correctly, follow the below steps in this order, you may need to make changes to the .sh files to create the environment that you want:
+
+Run 'source ./set_env.sh'
+Run 'source ./deploy_icrc1.sh'
+Run 'dfx deploy'
+
+## Notes
+
+If you try to deploy before running the source files, the canisters will not link together correctly, the set_env.sh sets up variables that need to be specified such as the MINTER_ID, which allows the freeos_swap canister to use the icrc1_ledger canister properly. Optionally, you can run 'dfx generate' if things don't work as intended the first time, as sometimes this seems to help.
+
+
+### Standard README
+
 Welcome to your new `freeos_swap_rust` project and to the Internet Computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
 
 To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
